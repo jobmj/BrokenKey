@@ -225,10 +225,7 @@ function renderPassage() {
     html += `<span class="${cls}">${escapeHTML(currentPassage[i])}</span>`;
   }
   passageEl.innerHTML = html;
-  if (isTyping) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < 25) {}
-  }
+  // Main-thread blocking freeze loop removed for butter-smooth 60+ FPS typing
 }
 
 function escapeHTML(value) {
@@ -766,6 +763,9 @@ class SoundEngine {
 
   playKey(isSpace = false) {
     if (!this.enabled || this.volume <= 0) return;
+    const now = Date.now();
+    if (this.lastSoundTime && now - this.lastSoundTime < 28) return; // Audio throttle cooldown for key-repeat
+    this.lastSoundTime = now;
     this.ensureContext();
     if (!this.ctx) return;
 
@@ -1202,11 +1202,21 @@ function initVoiceDictation() {
       }
     }
 
+    // Real-time live status update while speaking
+    if (interim && voiceStatusEl) {
+      voiceStatusEl.textContent = `🗣️ Hearing: "${interim.trim()}..."`;
+      voiceStatusEl.style.color = 'var(--accent)';
+      if (voiceMeterEl) voiceMeterEl.classList.add('active');
+    }
+
     // Direct streaming insertion into editable inputs
     if (finalChunk) {
       const existing = (customVoiceInput ? customVoiceInput.value : '').trim();
       const updated = existing ? `${existing} ${finalChunk.trim()}` : finalChunk.trim();
       syncCustomText(updated);
+      if (voiceStatusEl) {
+        voiceStatusEl.textContent = 'LISTENING... SPEAK CLEARLY (WORDS STREAM DIRECTLY INTO EDITOR)';
+      }
     }
   };
 
