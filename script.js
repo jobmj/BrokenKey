@@ -18,6 +18,7 @@ const passageEl = $('passage'),
   startBtn = $('start-btn'),
   resetBtn = $('reset-btn'),
   nextBtn = $('next-btn'),
+  replayBtn = $('replay-btn'),
   statusEl = $('status-label'),
   themeBtn = $('theme-btn'),
   ghostBtn = $('ghost-btn'),
@@ -259,7 +260,17 @@ inputEl.addEventListener('input', () => {
   renderPassage();
   updateStats();
 
-  if (charIndex === currentPassage.length) finishTest();
+  if (isTyping && startTime) {
+    sessionReplayEvents.push({
+      t: Date.now() - startTime,
+      val: typed,
+      cursor: inputEl.selectionStart || typed.length,
+      wpm: calculateWPM(),
+      errors: mistakes
+    });
+  }
+
+    if (charIndex === currentPassage.length) finishTest();
 });
 
 function calculateWPM() {
@@ -285,6 +296,8 @@ function updateStats() {
 function startTimer() {
   isTyping = true;
   startTime = Date.now();
+  sessionReplayEvents = [{ t: 0, val: '', cursor: 0, wpm: 0, errors: 0 }];
+  if (replayBtn) replayBtn.classList.add('hidden');
   statusEl.textContent = 'TEST IN PROGRESS';
   wpmHistory = [{ time: 0, wpm: 0 }];
   drawGraph();
@@ -309,6 +322,8 @@ function finishTest() {
   isTyping = false;
   inputEl.disabled = true;
   startBtn.disabled = false;
+  if (replayBtn) replayBtn.classList.add('hidden');
+  if (typeof closeReplayModal === 'function') closeReplayModal();
 
   statusEl.textContent = 'TEST COMPLETE';
 
@@ -329,6 +344,20 @@ function finishTest() {
   resultEl.classList.remove('hidden');
   resultEl.textContent =
     `Test complete · ${finalWPM} WPM · ${mistakes} errors`;
+
+  if (startTime) {
+    sessionReplayEvents.push({
+      t: Date.now() - startTime,
+      val: inputEl.value,
+      cursor: inputEl.value.length,
+      wpm: finalWPM,
+      errors: mistakes
+    });
+  }
+  if (bestEl) bestEl.textContent = bestWPM;
+  if (replayBtn && sessionReplayEvents.length > 1) {
+    replayBtn.classList.remove('hidden');
+  }
 }
 
 
@@ -353,6 +382,8 @@ function resetTest() {
   renderPassage();
   updateStats();
   startBtn.disabled = false;
+  if (replayBtn) replayBtn.classList.add('hidden');
+  if (typeof closeReplayModal === 'function') closeReplayModal();
 }
 
 startBtn.addEventListener('click', () => {
@@ -419,4 +450,236 @@ document.querySelectorAll('.wasd-key').forEach((key) => {
 [['wpm-graph-btn', 'wpm-card'], ['heatmap-btn', 'heatmap-card']].forEach(([btnId, cardId]) => {
   const btn = $(btnId), card = $(cardId);
   if (btn && card) btn.addEventListener('click', () => card.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+});
+
+
+// =============================================================
+// KEYRUSH SESSION REPLAY & TIMELINE SCRUBBER ENGINE (ISSUE #38)
+// =============================================================
+
+let sessionReplayEvents = [];
+let replayPassageText = '';
+let replayDuration = 0;
+let replayCurrentTime = 0;
+let replayIsPlaying = false;
+let replaySpeed = 1;
+let replayAnimFrame = null;
+let replayLastFrameTime = null;
+
+const replayModal = $('replay-modal');
+const closeReplayBtn = $('close-replay-btn');
+const replayPassageEl = $('replay-passage');
+const replayScrubber = $('replay-scrubber');
+const replayPlayBtn = $('replay-play-btn');
+const replayRestartBtn = $('replay-restart-btn');
+const replayTimeEl = $('replay-time');
+const replayWpmEl = $('replay-wpm');
+const replayErrorsEl = $('replay-errors');
+const replayStatusEl = $('replay-status');
+const scrubberTimestampEl = $('scrubber-timestamp');
+const speedBtns = document.querySelectorAll('.speed-btn');
+
+function initReplaySession() {
+  if (!sessionReplayEvents.length || !replayModal) return;
+
+  replayPassageText = currentPassage;
+  const lastEvent = sessionReplayEvents[sessionReplayEvents.length - 1];
+  replayDuration = Math.max(1000, lastEvent ? lastEvent.t : 1000);
+  replayCurrentTime = 0;
+  replayIsPlaying = false;
+  replaySpeed = 1;
+
+  if (replayScrubber) {
+    replayScrubber.min = '0';
+    replayScrubber.max = String(replayDuration);
+    replayScrubber.value = '0';
+  }
+
+  speedBtns.forEach((b) => {
+    b.classList.toggle('active', b.dataset.speed === '1');
+  });
+
+  if (replayPlayBtn) replayPlayBtn.textContent = '▶ Play';
+  if (replayStatusEl) replayStatusEl.textContent = 'READY';
+
+  renderReplayAt(0);
+
+  replayModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeReplayModal() {
+  if (!replayModal || replayModal.classList.contains('hidden')) return;
+  pauseReplay();
+  replayModal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function getReplayEventAt(timeMs) {
+  if (!sessionReplayEvents.length) return null;
+  if (timeMs <= 0) return sessionReplayEvents[0];
+
+  let low = 0, high = sessionReplayEvents.length - 1, best = 0;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (sessionReplayEvents[mid].t <= timeMs) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return sessionReplayEvents[best];
+}
+
+function renderReplayAt(timeMs) {
+  if (!replayPassageEl) return;
+  const clampedTime = Math.max(0, Math.min(timeMs, replayDuration));
+  const ev = getReplayEventAt(clampedTime);
+
+  const typedStr = ev ? ev.val : '';
+  const cursorIdx = ev ? ev.cursor : 0;
+
+  // Render passage character by character with retro caret
+  let html = '';
+  for (let i = 0; i < replayPassageText.length; i++) {
+    let cls = 'char';
+    if (i < typedStr.length) {
+      if (typedStr[i] === replayPassageText[i]) {
+        cls += ' correct';
+      } else {
+        cls += ' wrong';
+      }
+    }
+    if (i === cursorIdx) {
+      cls += ' current replay-cursor';
+    }
+    html += `<span class="${cls}">${escapeHTML(replayPassageText[i])}</span>`;
+  }
+  replayPassageEl.innerHTML = html;
+
+  // Update HUD metrics
+  if (replayTimeEl) replayTimeEl.textContent = `${(clampedTime / 1000).toFixed(1)}s`;
+  if (replayWpmEl) replayWpmEl.innerHTML = `${ev ? ev.wpm : 0} <small class="unit">WPM</small>`;
+  if (replayErrorsEl) replayErrorsEl.textContent = ev ? ev.errors : 0;
+  if (scrubberTimestampEl) {
+    scrubberTimestampEl.textContent = `${(clampedTime / 1000).toFixed(1)}s / ${(replayDuration / 1000).toFixed(1)}s`;
+  }
+  if (replayScrubber && document.activeElement !== replayScrubber) {
+    replayScrubber.value = String(clampedTime);
+  }
+}
+
+function replayLoop(now) {
+  if (!replayIsPlaying) return;
+  if (!replayLastFrameTime) replayLastFrameTime = now;
+  const delta = (now - replayLastFrameTime) * replaySpeed;
+  replayLastFrameTime = now;
+
+  replayCurrentTime += delta;
+  if (replayCurrentTime >= replayDuration) {
+    replayCurrentTime = replayDuration;
+    renderReplayAt(replayCurrentTime);
+    pauseReplay();
+    if (replayPlayBtn) replayPlayBtn.textContent = '↻ Replay';
+    if (replayStatusEl) replayStatusEl.textContent = 'COMPLETE';
+    return;
+  }
+
+  renderReplayAt(replayCurrentTime);
+  replayAnimFrame = requestAnimationFrame(replayLoop);
+}
+
+function playReplay() {
+  if (replayCurrentTime >= replayDuration) {
+    replayCurrentTime = 0;
+  }
+  replayIsPlaying = true;
+  replayLastFrameTime = performance.now();
+  if (replayPlayBtn) replayPlayBtn.textContent = '❚❚ Pause';
+  if (replayStatusEl) replayStatusEl.textContent = 'PLAYING';
+  cancelAnimationFrame(replayAnimFrame);
+  replayAnimFrame = requestAnimationFrame(replayLoop);
+}
+
+function pauseReplay() {
+  replayIsPlaying = false;
+  replayLastFrameTime = null;
+  cancelAnimationFrame(replayAnimFrame);
+  if (replayPlayBtn && replayCurrentTime < replayDuration) {
+    replayPlayBtn.textContent = '▶ Play';
+  }
+  if (replayStatusEl && replayCurrentTime < replayDuration) {
+    replayStatusEl.textContent = 'PAUSED';
+  }
+}
+
+function toggleReplayPlayback() {
+  if (replayIsPlaying) pauseReplay();
+  else playReplay();
+}
+
+// Replay UI Event Listeners
+if (replayBtn) {
+  replayBtn.addEventListener('click', initReplaySession);
+}
+
+if (closeReplayBtn) {
+  closeReplayBtn.addEventListener('click', closeReplayModal);
+}
+
+if (replayModal) {
+  replayModal.addEventListener('click', (e) => {
+    if (e.target === replayModal) closeReplayModal();
+  });
+}
+
+if (replayPlayBtn) {
+  replayPlayBtn.addEventListener('click', toggleReplayPlayback);
+}
+
+if (replayRestartBtn) {
+  replayRestartBtn.addEventListener('click', () => {
+    pauseReplay();
+    replayCurrentTime = 0;
+    renderReplayAt(0);
+    playReplay();
+  });
+}
+
+if (replayScrubber) {
+  replayScrubber.addEventListener('input', () => {
+    replayCurrentTime = Number(replayScrubber.value);
+    renderReplayAt(replayCurrentTime);
+  });
+}
+
+speedBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    speedBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    replaySpeed = Number(btn.dataset.speed) || 1;
+  });
+});
+
+// Keyboard Accessibility inside Replay Modal
+window.addEventListener('keydown', (e) => {
+  if (!replayModal || replayModal.classList.contains('hidden')) return;
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeReplayModal();
+  } else if (e.key === ' ' || e.code === 'Space') {
+    // Prevent scrolling while inside replay modal
+    e.preventDefault();
+    toggleReplayPlayback();
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    replayCurrentTime = Math.max(0, replayCurrentTime - 1000);
+    renderReplayAt(replayCurrentTime);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    replayCurrentTime = Math.min(replayDuration, replayCurrentTime + 1000);
+    renderReplayAt(replayCurrentTime);
+  }
 });
