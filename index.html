@@ -144,7 +144,7 @@
           </div>
         </div>
 
-        <!-- Tab 2: File Dropzone -->
+        <!-- Tab 2: File Dropzone & Direct Editor -->
         <div id="tab-panel-upload" class="custom-tab-panel hidden" role="tabpanel">
           <div id="custom-dropzone" class="custom-dropzone" tabindex="0" role="button" aria-label="File upload dropzone">
             <div class="dropzone-icon">📄</div>
@@ -156,9 +156,13 @@
               <span id="file-size" class="file-size"></span>
             </div>
           </div>
+          <div class="custom-edit-section">
+            <label for="custom-upload-input" class="custom-label">INSPECT / EDIT FILE TEXT DIRECTLY:</label>
+            <textarea id="custom-upload-input" class="custom-textarea" rows="4" placeholder="Uploaded text will appear here. You can edit, format, or trim it directly before loading..."></textarea>
+          </div>
         </div>
 
-        <!-- Tab 3: Voice Dictation -->
+        <!-- Tab 3: Responsive Voice Dictation & Real-Time Editor -->
         <div id="tab-panel-voice" class="custom-tab-panel hidden" role="tabpanel">
           <div class="voice-container">
             <div class="mic-status-wrapper">
@@ -167,8 +171,18 @@
               </button>
               <div id="voice-pulse-ring" class="voice-pulse-ring"></div>
             </div>
-            <p id="voice-status" class="voice-status">Click microphone to dictate your custom passage</p>
-            <div id="voice-transcript-preview" class="voice-transcript-preview" aria-live="polite">Transcript will appear here in real time...</div>
+            <div class="voice-activity-meter">
+              <span class="meter-bar"></span>
+              <span class="meter-bar"></span>
+              <span class="meter-bar"></span>
+              <span class="meter-bar"></span>
+              <span class="meter-bar"></span>
+            </div>
+            <p id="voice-status" class="voice-status">Click microphone to dictate (100% web-native Web Speech API, zero dependencies)</p>
+          </div>
+          <div class="custom-edit-section">
+            <label for="custom-voice-input" class="custom-label">LIVE VOICE TRANSCRIPTION &amp; EDIT BUFFER (EDIT FREELY):</label>
+            <textarea id="custom-voice-input" class="custom-textarea" rows="4" placeholder="Words stream directly into this box as you speak. You can click here anytime to type, edit, backspace, or correct words..."></textarea>
           </div>
         </div>
 
@@ -226,14 +240,14 @@
             </div>
             <div class="profile-selector" role="radiogroup" aria-label="Switch Profile">
               <button type="button" class="profile-card active" data-profile="blue">
-                <span class="profile-badge">CLICKY</span>
-                <span class="profile-name">Cherry MX Blue</span>
-                <span class="profile-specs">Dual-pulse tactile snap (2.4kHz - 3.2kHz)</span>
+                <span class="profile-badge">SATISFYING CLICK</span>
+                <span class="profile-name">Mechanical Clicky (Blue)</span>
+                <span class="profile-specs">Satisfying tactile snap &amp; mechanical bottom-out clack</span>
               </button>
               <button type="button" class="profile-card" data-profile="brown">
-                <span class="profile-badge">TACTILE</span>
-                <span class="profile-name">Cherry MX Brown</span>
-                <span class="profile-specs">Soft mechanical thud &amp; 450Hz lowpass</span>
+                <span class="profile-badge">TACTILE THUD</span>
+                <span class="profile-name">Mechanical Tactile (Brown)</span>
+                <span class="profile-specs">Subdued acoustic thud &amp; smooth tactile bump</span>
               </button>
             </div>
           </div>

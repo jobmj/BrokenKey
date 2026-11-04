@@ -770,7 +770,7 @@ class SoundEngine {
     if (!this.ctx) return;
 
     if (this.profile === 'blue') {
-      this.synthesizeCherryBlue(isSpace);
+      this.synthesizeSatisfyingMechanicalClick(isSpace);
     } else {
       this.synthesizeCherryBrown(isSpace);
     }
@@ -784,86 +784,115 @@ class SoundEngine {
     this.synthesizeTypoBuzzer();
   }
 
-  // Synthesize Cherry MX Blue clicky profile (crisp dual-pulse click + release ping)
-  synthesizeCherryBlue(isSpace) {
+  // Ultra-Satisfying Mechanical Switch Click (Cherry MX Blue / Box White style)
+  // Combines: 1. Sharp leaf snap impulse, 2. Secondary metallic ping, 3. Solid chassis bottom-out thud
+  synthesizeSatisfyingMechanicalClick(isSpace) {
     const t = this.ctx.currentTime;
     const masterGain = this.ctx.createGain();
-    masterGain.gain.setValueAtTime(this.volume * 0.45, t);
+    masterGain.gain.setValueAtTime(this.volume * 0.55, t);
     masterGain.connect(this.ctx.destination);
 
     if (isSpace) {
-      // Spacebar: deep cavity resonant clack ~130Hz
-      const osc = this.ctx.createOscillator();
-      const oscGain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(130, t);
-      osc.frequency.exponentialRampToValueAtTime(55, t + 0.038);
-      oscGain.gain.setValueAtTime(0.8, t);
-      oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
-      osc.connect(oscGain);
-      oscGain.connect(masterGain);
-      osc.start(t);
-      osc.stop(t + 0.04);
-    } else {
-      // Primary contact leaf snap (2.4kHz)
+      // Spacebar: deep hollow body resonance (~125Hz) + metallic wire stabilizer clack (~880Hz)
       const osc1 = this.ctx.createOscillator();
       const gain1 = this.ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(2400, t);
-      gain1.gain.setValueAtTime(0.65, t);
-      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.009);
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(135, t);
+      osc1.frequency.exponentialRampToValueAtTime(50, t + 0.045);
+      gain1.gain.setValueAtTime(0.9, t);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
       osc1.connect(gain1);
       gain1.connect(masterGain);
       osc1.start(t);
-      osc1.stop(t + 0.01);
+      osc1.stop(t + 0.048);
 
-      // Delayed secondary release snap (3.2kHz)
+      // Stabilizer bar clack
       const osc2 = this.ctx.createOscillator();
       const gain2 = this.ctx.createGain();
       osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(3200, t + 0.003);
-      gain2.gain.setValueAtTime(0, t);
-      gain2.gain.setValueAtTime(0.5, t + 0.003);
-      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+      osc2.frequency.setValueAtTime(880, t);
+      gain2.gain.setValueAtTime(0.4, t);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
       osc2.connect(gain2);
       gain2.connect(masterGain);
-      osc2.start(t + 0.003);
-      osc2.stop(t + 0.016);
-    }
+      osc2.start(t);
+      osc2.stop(t + 0.015);
 
-    this.createNoiseTransient(masterGain, isSpace ? 800 : 2000, 0.012, 0.35);
+      this.createNoiseTransient(masterGain, 900, 0.018, 0.4);
+    } else {
+      // 1. Primary leaf snap: high-frequency crisp impulse at 2600Hz
+      const snapOsc1 = this.ctx.createOscillator();
+      const snapGain1 = this.ctx.createGain();
+      snapOsc1.type = 'sine';
+      snapOsc1.frequency.setValueAtTime(2600, t);
+      snapGain1.gain.setValueAtTime(0.8, t);
+      snapGain1.gain.exponentialRampToValueAtTime(0.001, t + 0.006);
+      snapOsc1.connect(snapGain1);
+      snapGain1.connect(masterGain);
+      snapOsc1.start(t);
+      snapOsc1.stop(t + 0.008);
+
+      // 2. Secondary rebound ping at 3400Hz (3ms later for acoustic realism)
+      const snapOsc2 = this.ctx.createOscillator();
+      const snapGain2 = this.ctx.createGain();
+      snapOsc2.type = 'sine';
+      snapOsc2.frequency.setValueAtTime(3400, t + 0.0025);
+      snapGain2.gain.setValueAtTime(0, t);
+      snapGain2.gain.setValueAtTime(0.65, t + 0.0025);
+      snapGain2.gain.exponentialRampToValueAtTime(0.001, t + 0.014);
+      snapOsc2.connect(snapGain2);
+      snapGain2.connect(masterGain);
+      snapOsc2.start(t + 0.0025);
+      snapOsc2.stop(t + 0.016);
+
+      // 3. Chassis bottom-out thud: punchy 320Hz body resonance
+      const bodyOsc = this.ctx.createOscillator();
+      const bodyGain = this.ctx.createGain();
+      bodyOsc.type = 'triangle';
+      bodyOsc.frequency.setValueAtTime(320, t);
+      bodyOsc.frequency.exponentialRampToValueAtTime(140, t + 0.022);
+      bodyGain.gain.setValueAtTime(0.5, t);
+      bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.022);
+      bodyOsc.connect(bodyGain);
+      bodyGain.connect(masterGain);
+      bodyOsc.start(t);
+      bodyOsc.stop(t + 0.024);
+
+      // 4. Keycap plastic collision texture
+      this.createNoiseTransient(masterGain, 2400, 0.011, 0.45);
+    }
   }
 
-  // Synthesize Cherry MX Brown tactile profile (gentle bump + soft mechanical thud)
+  // Cherry MX Brown tactile profile (gentle bump + soft mechanical thud)
   synthesizeCherryBrown(isSpace) {
     const t = this.ctx.currentTime;
     const masterGain = this.ctx.createGain();
-    masterGain.gain.setValueAtTime(this.volume * 0.4, t);
+    masterGain.gain.setValueAtTime(this.volume * 0.42, t);
     masterGain.connect(this.ctx.destination);
 
-    const freq = isSpace ? 105 : 450;
+    const freq = isSpace ? 110 : 450;
     const decay = isSpace ? 0.045 : 0.018;
 
     const osc = this.ctx.createOscillator();
     const oscGain = this.ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, t);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, t + decay);
-    oscGain.gain.setValueAtTime(0.7, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.35, t + decay);
+    oscGain.gain.setValueAtTime(0.75, t);
     oscGain.gain.exponentialRampToValueAtTime(0.001, t + decay);
     osc.connect(oscGain);
     oscGain.connect(masterGain);
     osc.start(t);
     osc.stop(t + decay + 0.002);
 
-    this.createNoiseTransient(masterGain, isSpace ? 600 : 1200, decay * 0.7, 0.25);
+    this.createNoiseTransient(masterGain, isSpace ? 650 : 1300, decay * 0.7, 0.28);
   }
 
   // Synthesize Typo Buzzer (discordant dyad: 140Hz & 165Hz sawtooth waves)
   synthesizeTypoBuzzer() {
     const t = this.ctx.currentTime;
     const masterGain = this.ctx.createGain();
-    masterGain.gain.setValueAtTime(this.volume * 0.45, t);
+    masterGain.gain.setValueAtTime(this.volume * 0.48, t);
     masterGain.connect(this.ctx.destination);
 
     const filter = this.ctx.createBiquadFilter();
@@ -880,7 +909,7 @@ class SoundEngine {
     osc2.type = 'sawtooth';
     osc2.frequency.setValueAtTime(165, t);
 
-    gainNode.gain.setValueAtTime(0.5, t);
+    gainNode.gain.setValueAtTime(0.55, t);
     gainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
 
     osc1.connect(gainNode);
@@ -907,7 +936,7 @@ class SoundEngine {
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'bandpass';
       filter.frequency.setValueAtTime(filterFreq, this.ctx.currentTime);
-      filter.Q.setValueAtTime(1.5, this.ctx.currentTime);
+      filter.Q.setValueAtTime(1.6, this.ctx.currentTime);
 
       const gain = this.ctx.createGain();
       gain.gain.setValueAtTime(peakGain, this.ctx.currentTime);
@@ -925,7 +954,7 @@ class SoundEngine {
 const soundEngine = new SoundEngine();
 
 // ==========================================================================
-// ISSUE #42: MULTI-SOURCE CUSTOM PASSAGE STUDIO
+// ISSUE #42: MULTI-SOURCE CUSTOM PASSAGE STUDIO (WITH DIRECT EDITING)
 // ==========================================================================
 
 const CUSTOM_PRESETS = {
@@ -975,7 +1004,12 @@ function validatePassage(text) {
 const customPassageBtn = $('custom-passage-btn');
 const customPassageModal = $('custom-passage-modal');
 const closeCustomPassageBtn = $('close-custom-passage-btn');
+
+// 3 Synchronized Text Inputs (Type, Upload, Voice)
 const customPassageInput = $('custom-passage-input');
+const customUploadInput = $('custom-upload-input');
+const customVoiceInput = $('custom-voice-input');
+
 const customWordCountEl = $('custom-word-count');
 const customCharCountEl = $('custom-char-count');
 const customValidationMsgEl = $('custom-validation-msg');
@@ -998,13 +1032,30 @@ const fileSizeEl = $('file-size');
 // Voice Dictation Elements
 const voiceRecordBtn = $('voice-record-btn');
 const voiceStatusEl = $('voice-status');
-const voicePreviewEl = $('voice-transcript-preview');
+const voiceMeterEl = document.querySelector('.voice-activity-meter');
 let voiceRecognition = null;
 let isVoiceRecording = false;
+let shouldKeepVoiceListening = false;
+
+// Synchronize all 3 text inputs seamlessly
+function syncCustomText(sourceValue, senderInput = null) {
+  if (customPassageInput && senderInput !== customPassageInput) {
+    customPassageInput.value = sourceValue;
+  }
+  if (customUploadInput && senderInput !== customUploadInput) {
+    customUploadInput.value = sourceValue;
+  }
+  if (customVoiceInput && senderInput !== customVoiceInput) {
+    customVoiceInput.value = sourceValue;
+  }
+  updateCustomMetrics();
+}
 
 function updateCustomMetrics() {
-  if (!customPassageInput) return;
-  const raw = customPassageInput.value;
+  const raw = (customPassageInput ? customPassageInput.value : '') ||
+              (customUploadInput ? customUploadInput.value : '') ||
+              (customVoiceInput ? customVoiceInput.value : '');
+
   const sanitized = sanitizeCustomPassage(raw);
   const words = countWords(sanitized);
   const chars = sanitized.length;
@@ -1050,11 +1101,19 @@ function switchCustomTab(tabKey) {
     panel.classList.toggle('hidden', panel.id !== `tab-panel-${tabKey}`);
     panel.classList.toggle('active', panel.id === `tab-panel-${tabKey}`);
   });
+
+  // Focus the respective editor in the active tab
+  if (tabKey === 'type' && customPassageInput) customPassageInput.focus();
+  if (tabKey === 'upload' && customUploadInput) customUploadInput.focus();
+  if (tabKey === 'voice' && customVoiceInput) customVoiceInput.focus();
 }
 
 function applyCustomPassage() {
-  if (!customPassageInput) return;
-  const validation = validatePassage(customPassageInput.value);
+  const currentText = (customPassageInput ? customPassageInput.value : '') ||
+                      (customUploadInput ? customUploadInput.value : '') ||
+                      (customVoiceInput ? customVoiceInput.value : '');
+
+  const validation = validatePassage(currentText);
   if (!validation.valid) return;
 
   isCustomPassage = true;
@@ -1074,7 +1133,7 @@ function clearCustomPassage() {
   loadPassage();
 }
 
-// File Drag & Drop Handlers
+// File Drag & Drop Handlers with Direct Editing
 function handleCustomFile(file) {
   if (!file) return;
   if (!file.name.toLowerCase().endsWith('.txt') && file.type && !file.type.includes('text')) {
@@ -1085,26 +1144,23 @@ function handleCustomFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const content = e.target.result;
-    if (customPassageInput) {
-      customPassageInput.value = content;
-      updateCustomMetrics();
-    }
+    syncCustomText(content);
+
     if (fileMetaEl && fileNameEl && fileSizeEl) {
       fileNameEl.textContent = file.name;
       fileSizeEl.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
       fileMetaEl.classList.remove('hidden');
     }
-    switchCustomTab('type');
   };
   reader.readAsText(file);
 }
 
-// Voice Dictation (Web Speech API)
+// Native Zero-Dependency Web Speech API Voice Dictation
 function initVoiceDictation() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     if (voiceStatusEl) {
-      voiceStatusEl.textContent = 'Voice dictation is not supported in this browser. Please use Chrome/Edge or paste in the Type tab.';
+      voiceStatusEl.textContent = 'SpeechRecognition API is not supported in this browser. Please use Chrome/Edge or edit in the Type/Upload tabs.';
       voiceStatusEl.style.color = 'var(--wrong)';
     }
     if (voiceRecordBtn) voiceRecordBtn.disabled = true;
@@ -1119,10 +1175,19 @@ function initVoiceDictation() {
   voiceRecognition.onstart = () => {
     isVoiceRecording = true;
     if (voiceRecordBtn) voiceRecordBtn.classList.add('recording');
+    if (voiceMeterEl) voiceMeterEl.classList.add('active');
     if (voiceStatusEl) {
-      voiceStatusEl.textContent = 'LISTENING... SPEAK CLEARLY INTO YOUR MICROPHONE';
+      voiceStatusEl.textContent = 'LISTENING... SPEAK CLEARLY (WORDS STREAM DIRECTLY INTO EDITOR)';
       voiceStatusEl.style.color = 'var(--accent)';
     }
+  };
+
+  voiceRecognition.onspeechstart = () => {
+    if (voiceMeterEl) voiceMeterEl.classList.add('active');
+  };
+
+  voiceRecognition.onspeechend = () => {
+    // Keep active visual rhythm while recording
   };
 
   voiceRecognition.onresult = (event) => {
@@ -1136,25 +1201,34 @@ function initVoiceDictation() {
         interim += transcript;
       }
     }
-    if (voicePreviewEl) {
-      voicePreviewEl.textContent = (customPassageInput ? customPassageInput.value + ' ' : '') + finalChunk + interim;
-    }
-    if (customPassageInput && finalChunk) {
-      const currentVal = customPassageInput.value.trim();
-      customPassageInput.value = currentVal ? `${currentVal} ${finalChunk.trim()}` : finalChunk.trim();
-      updateCustomMetrics();
+
+    // Direct streaming insertion into editable inputs
+    if (finalChunk) {
+      const existing = (customVoiceInput ? customVoiceInput.value : '').trim();
+      const updated = existing ? `${existing} ${finalChunk.trim()}` : finalChunk.trim();
+      syncCustomText(updated);
     }
   };
 
   voiceRecognition.onerror = (e) => {
+    if (e.error === 'no-speech') {
+      // Normal pause in speech, don't break session
+      return;
+    }
     if (voiceStatusEl) {
-      voiceStatusEl.textContent = `Dictation note: ${e.error || 'Check microphone permissions'}`;
+      voiceStatusEl.textContent = `Microphone note: ${e.error || 'Check browser permissions'}`;
       voiceStatusEl.style.color = 'var(--wrong)';
     }
-    stopVoiceDictation();
   };
 
   voiceRecognition.onend = () => {
+    // If the user hasn't explicitly stopped dictation, auto-reconnect to prevent browser silence timeouts
+    if (shouldKeepVoiceListening) {
+      try {
+        voiceRecognition.start();
+        return;
+      } catch (_) {}
+    }
     stopVoiceDictation();
   };
 }
@@ -1162,6 +1236,7 @@ function initVoiceDictation() {
 function startVoiceDictation() {
   if (!voiceRecognition) initVoiceDictation();
   if (voiceRecognition && !isVoiceRecording) {
+    shouldKeepVoiceListening = true;
     try {
       voiceRecognition.start();
     } catch (_) {}
@@ -1169,10 +1244,12 @@ function startVoiceDictation() {
 }
 
 function stopVoiceDictation() {
+  shouldKeepVoiceListening = false;
   isVoiceRecording = false;
   if (voiceRecordBtn) voiceRecordBtn.classList.remove('recording');
-  if (voiceStatusEl && voiceStatusEl.textContent.includes('LISTENING')) {
-    voiceStatusEl.textContent = 'Dictation paused. Click microphone to resume or apply passage.';
+  if (voiceMeterEl) voiceMeterEl.classList.remove('active');
+  if (voiceStatusEl) {
+    voiceStatusEl.textContent = 'Dictation paused. Click microphone to resume or edit text directly below.';
     voiceStatusEl.style.color = 'var(--muted)';
   }
   if (voiceRecognition) {
@@ -1196,8 +1273,15 @@ if (customPassageModal) {
   });
 }
 
+// Real-time bidirectional synchronization across all 3 textareas
 if (customPassageInput) {
-  customPassageInput.addEventListener('input', updateCustomMetrics);
+  customPassageInput.addEventListener('input', () => syncCustomText(customPassageInput.value, customPassageInput));
+}
+if (customUploadInput) {
+  customUploadInput.addEventListener('input', () => syncCustomText(customUploadInput.value, customUploadInput));
+}
+if (customVoiceInput) {
+  customVoiceInput.addEventListener('input', () => syncCustomText(customVoiceInput.value, customVoiceInput));
 }
 
 customTabBtns.forEach((btn) => {
@@ -1207,21 +1291,14 @@ customTabBtns.forEach((btn) => {
 presetChips.forEach((chip) => {
   chip.addEventListener('click', () => {
     const text = CUSTOM_PRESETS[chip.dataset.preset];
-    if (text && customPassageInput) {
-      customPassageInput.value = text;
-      updateCustomMetrics();
-    }
+    if (text) syncCustomText(text);
   });
 });
 
 if (clearCustomInputBtn) {
   clearCustomInputBtn.addEventListener('click', () => {
-    if (customPassageInput) {
-      customPassageInput.value = '';
-      updateCustomMetrics();
-    }
+    syncCustomText('');
     if (fileMetaEl) fileMetaEl.classList.add('hidden');
-    if (voicePreviewEl) voicePreviewEl.textContent = 'Transcript will appear here in real time...';
   });
 }
 
