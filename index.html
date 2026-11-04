@@ -23,7 +23,15 @@
         </div>
         <div class="brand-copy"><h1>KeyRush</h1><p class="eyebrow">TKM FOSS // THE TYPING ARENA</p><span class="brand-stamp">INPUT / OUTPUT / CHAOS</span></div>
       </div>
-      <button id="theme-btn" class="icon-btn" type="button" aria-label="Toggle light and dark mode">☼ <span>Light mode</span></button>
+      <div class="topbar-actions">
+        <button id="audio-toggle-btn" class="icon-btn audio-btn" type="button" aria-label="Toggle mechanical audio" title="Toggle audio feedback (Ctrl+M)">
+          <span id="audio-icon">🔊</span> <span id="audio-label">Sound</span>
+        </button>
+        <button id="audio-settings-btn" class="icon-btn audio-settings-btn" type="button" aria-label="Audio switch settings" title="Mechanical switch profiles & volume">
+          ⚙ <span>Audio</span>
+        </button>
+        <button id="theme-btn" class="icon-btn" type="button" aria-label="Toggle light and dark mode">☼ <span>Light mode</span></button>
+      </div>
     </header>
     <div class="ticker" aria-hidden="true"><span>● LIVE BUILD</span><span>NO BUILD STEP</span><span>PATCH THE CHAOS</span><span>TKM FOSS / 2026</span><span>● LIVE BUILD</span></div>
     <p class="subtitle">TYPE FAST. THINK SHARP.<span class="subtitle-tag"> // NEW : GHOST MODE  // TRY BEATING THE OTHER SIDE </span></p>
@@ -38,7 +46,14 @@
     </section>
 
     <section class="test-panel">
-      <div class="panel-heading"><div><span class="live-dot"></span><span id="status-label">READY WHEN YOU ARE</span></div><span class="tiny-label">CHOOSE YOUR ROUND</span><span class="panel-code">SYS.ERR // 000</span></div>
+      <div class="panel-heading">
+        <div><span class="live-dot"></span><span id="status-label">READY WHEN YOU ARE</span></div>
+        <div class="panel-meta-group">
+          <span id="custom-active-tag" class="custom-active-tag hidden">CUSTOM PASSAGE <button id="clear-custom-passage-btn" type="button" title="Revert to random passages">✕</button></span>
+          <span class="tiny-label">CHOOSE YOUR ROUND</span>
+          <span class="panel-code">SYS.ERR // 000</span>
+        </div>
+      </div>
       <div class="toolbar">
         <div class="timer-options" aria-label="Test duration">
           <button class="time-btn" data-time="15" type="button">15 sec</button>
@@ -49,6 +64,7 @@
           <button id="heatmap-btn" class="feature-btn" type="button">▦ Per-key error heatmap <span class="soon">NEW</span></button>
           <button id="wpm-graph-btn" class="feature-btn" type="button">⌁ Live WPM graph <span class="soon">NEW</span></button>
           <button id="ghost-btn" class="ghost-btn" type="button">◉ Race a ghost <span class="soon">BETA</span></button>
+          <button id="custom-passage-btn" class="feature-btn custom-feature-btn" type="button">✏ Custom passage <span class="soon">STUDIO</span></button>
         </div>
       </div>
       <div id="passage" class="passage" aria-label="Text to type"></div>
@@ -96,6 +112,165 @@
     </section>
     <div class="bottom-chaos"><span class="tiny-sticker">DEBUG THE EXPERIENCE</span><span>STATUS: MOSTLY OPERATIONAL*</span><span>* RESULTS MAY BE QUESTIONABLE</span></div>
     <footer><span class="foss-credit"><img src="assets/tkm-foss-logo.png" alt="TKM FOSS logo" /><span>Built for curious minds and bug hunters.<small>TKM FOSS COMMUNITY BUILD</small></span></span><span>VANILLA JS · NO DEPENDENCIES</span></footer>
+
+    <!-- Custom Passage Studio Modal (Issue #42) -->
+    <div id="custom-passage-modal" class="custom-modal hidden" role="dialog" aria-modal="true" aria-labelledby="custom-passage-title">
+      <div class="custom-modal-card">
+        <div class="custom-modal-header">
+          <div class="custom-title-group">
+            <span class="live-dot"></span>
+            <h3 id="custom-passage-title">Custom Passage Studio</h3>
+            <span class="badge live-badge">MULTIMODAL</span>
+          </div>
+          <button id="close-custom-passage-btn" class="icon-btn" type="button" aria-label="Close custom passage studio">✕ <span>Close</span></button>
+        </div>
+
+        <div class="custom-tabs" role="tablist" aria-label="Passage input source">
+          <button id="tab-btn-type" class="custom-tab-btn active" data-tab="type" role="tab" aria-selected="true" type="button">✏ Type / Paste</button>
+          <button id="tab-btn-upload" class="custom-tab-btn" data-tab="upload" role="tab" aria-selected="false" type="button">📁 Upload .txt</button>
+          <button id="tab-btn-voice" class="custom-tab-btn" data-tab="voice" role="tab" aria-selected="false" type="button">🎤 Voice Dictation</button>
+        </div>
+
+        <!-- Tab 1: Type / Paste -->
+        <div id="tab-panel-type" class="custom-tab-panel active" role="tabpanel">
+          <label for="custom-passage-input" class="custom-label">ENTER CUSTOM PRACTICE TEXT (MIN 10 WORDS):</label>
+          <textarea id="custom-passage-input" class="custom-textarea" rows="6" placeholder="Paste an article excerpt, programming snippet, study notes, or custom drills here..."></textarea>
+          
+          <div class="custom-presets">
+            <span class="preset-label">Quick Presets:</span>
+            <button type="button" class="preset-chip" data-preset="code">💻 JavaScript Async</button>
+            <button type="button" class="preset-chip" data-preset="literature">📖 Literature Quote</button>
+            <button type="button" class="preset-chip" data-preset="tech">⚡ Unix Philosophy</button>
+          </div>
+        </div>
+
+        <!-- Tab 2: File Dropzone -->
+        <div id="tab-panel-upload" class="custom-tab-panel hidden" role="tabpanel">
+          <div id="custom-dropzone" class="custom-dropzone" tabindex="0" role="button" aria-label="File upload dropzone">
+            <div class="dropzone-icon">📄</div>
+            <p class="dropzone-title">DRAG &amp; DROP A <code>.TXT</code> FILE HERE</p>
+            <p class="dropzone-sub">or click to browse from your device</p>
+            <input type="file" id="custom-file-input" accept=".txt,text/plain" class="sr-only" />
+            <div id="file-meta" class="file-meta hidden">
+              <span id="file-name" class="file-name"></span>
+              <span id="file-size" class="file-size"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Voice Dictation -->
+        <div id="tab-panel-voice" class="custom-tab-panel hidden" role="tabpanel">
+          <div class="voice-container">
+            <div class="mic-status-wrapper">
+              <button id="voice-record-btn" class="voice-mic-btn" type="button" aria-label="Start voice dictation">
+                <span class="mic-icon">🎙️</span>
+              </button>
+              <div id="voice-pulse-ring" class="voice-pulse-ring"></div>
+            </div>
+            <p id="voice-status" class="voice-status">Click microphone to dictate your custom passage</p>
+            <div id="voice-transcript-preview" class="voice-transcript-preview" aria-live="polite">Transcript will appear here in real time...</div>
+          </div>
+        </div>
+
+        <!-- Validation & Metrics Bar -->
+        <div class="custom-metrics-bar">
+          <div class="metric-item">
+            <span class="metric-label">Words:</span>
+            <span id="custom-word-count" class="metric-val">0</span>
+            <span class="metric-hint">(min 10)</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Characters:</span>
+            <span id="custom-char-count" class="metric-val">0</span>
+            <span class="metric-hint">/ 3000 max</span>
+          </div>
+          <div id="custom-validation-msg" class="custom-validation-msg">Enter at least 10 words</div>
+        </div>
+
+        <!-- Action Footer -->
+        <div class="custom-modal-footer">
+          <button id="clear-custom-input-btn" class="btn btn-secondary" type="button">Clear Text</button>
+          <button id="apply-custom-passage-btn" class="btn btn-primary" type="button" disabled>Load Custom Passage ▶</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Procedural Mechanical Audio Settings Modal (Issue #42) -->
+    <div id="audio-settings-modal" class="audio-modal hidden" role="dialog" aria-modal="true" aria-labelledby="audio-settings-title">
+      <div class="audio-modal-card">
+        <div class="audio-modal-header">
+          <div class="audio-title-group">
+            <span class="live-dot"></span>
+            <h3 id="audio-settings-title">Mechanical Audio Synthesizer</h3>
+            <span class="badge live-badge">WEB AUDIO API</span>
+          </div>
+          <button id="close-audio-settings-btn" class="icon-btn" type="button" aria-label="Close audio settings">✕ <span>Close</span></button>
+        </div>
+
+        <div class="audio-settings-body">
+          <div class="audio-setting-row">
+            <div class="setting-info">
+              <label for="audio-master-switch" class="setting-title">Acoustic Keystroke Feedback</label>
+              <span class="setting-desc">Zero-asset procedural mechanical switch clicks synthesized in real time.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="audio-master-switch" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="audio-setting-row">
+            <div class="setting-info">
+              <label class="setting-title">Mechanical Switch Profile</label>
+              <span class="setting-desc">Select simulated mechanical switch acoustics:</span>
+            </div>
+            <div class="profile-selector" role="radiogroup" aria-label="Switch Profile">
+              <button type="button" class="profile-card active" data-profile="blue">
+                <span class="profile-badge">CLICKY</span>
+                <span class="profile-name">Cherry MX Blue</span>
+                <span class="profile-specs">Dual-pulse tactile snap (2.4kHz - 3.2kHz)</span>
+              </button>
+              <button type="button" class="profile-card" data-profile="brown">
+                <span class="profile-badge">TACTILE</span>
+                <span class="profile-name">Cherry MX Brown</span>
+                <span class="profile-specs">Soft mechanical thud &amp; 450Hz lowpass</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="audio-setting-row">
+            <div class="setting-info">
+              <label for="audio-volume-slider" class="setting-title">Master Feedback Volume</label>
+              <span class="setting-desc">Adjust keystroke volume level:</span>
+            </div>
+            <div class="volume-slider-group">
+              <input id="audio-volume-slider" class="audio-volume-slider" type="range" min="0" max="100" value="60" aria-label="Master volume" />
+              <span id="audio-volume-val" class="volume-val">60%</span>
+            </div>
+          </div>
+
+          <div class="audio-setting-row">
+            <div class="setting-info">
+              <label for="audio-typo-switch" class="setting-title">Typo Error Dissonance Buzzer</label>
+              <span class="setting-desc">Plays a 140Hz discordant tone on incorrect character inputs.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="audio-typo-switch" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="audio-test-actions">
+            <span class="test-label">Audition Sounds:</span>
+            <button id="test-audio-key-btn" class="btn btn-secondary" type="button">Test Keystroke ♫</button>
+            <button id="test-audio-space-btn" class="btn btn-secondary" type="button">Test Spacebar ♫</button>
+            <button id="test-audio-error-btn" class="btn btn-secondary" type="button">Test Typo Buzz ♫</button>
+          </div>
+        </div>
+
+        <div class="audio-hint">Tip: Press <kbd>Ctrl</kbd> + <kbd>M</kbd> anytime during a test to toggle sound mute.</div>
+      </div>
+    </div>
 
     <!-- Session Replay Theater Modal -->
     <div id="replay-modal" class="replay-modal hidden" role="dialog" aria-modal="true" aria-labelledby="replay-title">

@@ -1315,3 +1315,639 @@ body.light-mode .replay-scrubber {
     align-items: flex-start;
   }
 }
+
+
+/* ==========================================================================
+   ISSUE #42: MULTI-SOURCE CUSTOM PASSAGES & MECHANICAL AUDIO SYNTHESIZER
+   ========================================================================== */
+
+/* Topbar Action Group */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audio-btn, .audio-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.custom-active-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 800 0.62rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border: 1px solid var(--accent);
+}
+
+.custom-active-tag button {
+  background: transparent;
+  border: none;
+  color: var(--accent-ink);
+  font-weight: 900;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.custom-active-tag button:hover {
+  color: var(--wrong);
+}
+
+/* Modals Overlay (Custom Passage Studio & Audio Settings) */
+.custom-modal, .audio-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(8, 9, 10, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.custom-modal.hidden, .audio-modal.hidden {
+  display: none !important;
+}
+
+.custom-modal-card, .audio-modal-card {
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  box-shadow: 8px 8px 0 var(--accent);
+  width: 100%;
+  max-width: 660px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  color: var(--text);
+  position: relative;
+}
+
+.custom-modal-header, .audio-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.custom-title-group, .audio-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.custom-modal-header h3, .audio-modal-header h3 {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Custom Passage Tabs */
+.custom-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 18px;
+}
+
+.custom-tab-btn {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  color: var(--muted);
+  font: 700 0.74rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.custom-tab-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.custom-tab-btn.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 900;
+}
+
+/* Tab Panels */
+.custom-tab-panel {
+  display: block;
+}
+
+.custom-tab-panel.hidden {
+  display: none !important;
+}
+
+.custom-label {
+  display: block;
+  font: 700 0.65rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.custom-textarea {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: 0.95rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 14px;
+  resize: vertical;
+  min-height: 140px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.custom-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.custom-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.preset-label {
+  font: 700 0.64rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.preset-chip {
+  background: var(--panel2);
+  border: 1px dashed var(--border);
+  color: var(--text);
+  font: 700 0.68rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.preset-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Tab 2: File Dropzone */
+.custom-dropzone {
+  border: 2px dashed var(--border);
+  background: var(--panel2);
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.custom-dropzone:hover, .custom-dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(214, 255, 53, 0.04);
+  box-shadow: inset 0 0 16px rgba(214, 255, 53, 0.08);
+}
+
+.dropzone-icon {
+  font-size: 2.2rem;
+  margin-bottom: 10px;
+}
+
+.dropzone-title {
+  font: 800 0.85rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+}
+
+.dropzone-sub {
+  font: 0.72rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  margin: 0;
+}
+
+.file-meta {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  padding: 6px 12px;
+}
+
+.file-name {
+  color: var(--accent);
+  font: 700 0.76rem ui-monospace, monospace;
+}
+
+.file-size {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+/* Tab 3: Voice Dictation */
+.voice-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+}
+
+.mic-status-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.voice-mic-btn {
+  position: relative;
+  z-index: 2;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-size: 1.8rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s ease;
+}
+
+.voice-mic-btn:hover {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+
+.voice-mic-btn.recording {
+  border-color: var(--wrong);
+  background: #ff5a7220;
+}
+
+.voice-pulse-ring {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid var(--wrong);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.voice-mic-btn.recording + .voice-pulse-ring {
+  animation: micPulse 1.4s infinite ease-out;
+}
+
+@keyframes micPulse {
+  0% { transform: scale(0.8); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.voice-status {
+  font: 700 0.78rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 14px;
+  text-align: center;
+}
+
+.voice-transcript-preview {
+  width: 100%;
+  min-height: 80px;
+  max-height: 120px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  font: 0.88rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+}
+
+/* Custom Metrics & Validation Bar */
+.custom-metrics-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 0.75rem ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.metric-label {
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.metric-val {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.metric-hint {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.custom-validation-msg {
+  margin-left: auto;
+  font: 700 0.72rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--wrong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.custom-validation-msg.valid {
+  color: var(--correct);
+}
+
+/* Custom Modal Footer */
+.custom-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* ==========================================
+   AUDIO SETTINGS MODAL & CONTROLS
+   ========================================== */
+.audio-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.audio-setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-info {
+  flex: 1;
+}
+
+.setting-title {
+  display: block;
+  font: 800 0.82rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.setting-desc {
+  display: block;
+  font: 0.72rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+}
+
+/* Custom Switch Toggle */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch .slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--panel2);
+  border: 1px solid var(--border);
+  transition: 0.2s;
+}
+
+.switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--muted);
+  transition: 0.2s;
+}
+
+.switch input:checked + .slider {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(20px);
+  background-color: var(--accent-ink);
+}
+
+/* Switch Profiles Selector */
+.profile-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.profile-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.profile-card.active {
+  border-color: var(--accent);
+  background: rgba(214, 255, 53, 0.06);
+  box-shadow: 3px 3px 0 var(--accent);
+}
+
+.profile-badge {
+  font: 800 0.58rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
+.profile-name {
+  font: 900 0.85rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+}
+
+.profile-specs {
+  font: 0.66rem/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+}
+
+/* Volume Slider Group */
+.volume-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+}
+
+.audio-volume-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.audio-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border: 2px solid #08090a;
+  cursor: pointer;
+}
+
+.audio-volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border: 2px solid #08090a;
+  cursor: pointer;
+}
+
+.volume-val {
+  font: 800 0.74rem ui-monospace, monospace;
+  color: var(--accent);
+  min-width: 36px;
+}
+
+/* Audition Sounds Actions */
+.audio-test-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.test-label {
+  font: 700 0.68rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.audio-hint {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  text-align: center;
+  font: 600 0.65rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* Light mode overrides */
+body.light-mode .custom-modal,
+body.light-mode .audio-modal {
+  background: rgba(240, 242, 233, 0.94);
+}
+
+body.light-mode .custom-modal-card,
+body.light-mode .audio-modal-card {
+  box-shadow: 8px 8px 0 var(--accent);
+}
+
+body.light-mode .custom-textarea,
+body.light-mode .custom-tab-btn,
+body.light-mode .custom-dropzone,
+body.light-mode .voice-container,
+body.light-mode .custom-metrics-bar,
+body.light-mode .profile-card {
+  background: #e7eadf;
+}
+
+@media (max-width: 680px) {
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .custom-modal-card, .audio-modal-card {
+    padding: 16px;
+  }
+  .profile-selector {
+    grid-template-columns: 1fr;
+  }
+  .audio-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .volume-slider-group {
+    width: 100%;
+  }
+}

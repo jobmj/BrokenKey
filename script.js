@@ -198,8 +198,15 @@ function recordGraphSample() {
   drawGraph();
 }
 
+let isCustomPassage = false;
+let customPassageText = '';
+
 function loadPassage() {
-  currentPassage = passages[Math.floor(Math.random() * passages.length)];
+  if (isCustomPassage && customPassageText) {
+    currentPassage = customPassageText;
+  } else {
+    currentPassage = passages[Math.floor(Math.random() * passages.length)];
+  }
   charIndex = 0;
   previousTyped = '';
   charStates = new Array(currentPassage.length).fill('');
@@ -245,11 +252,24 @@ inputEl.addEventListener('input', () => {
   // If characters were added (forward typing)
   if (typed.length > previousTyped.length) {
     const addedCount = typed.length - previousTyped.length;
+    let hasMistake = false;
+    let isSpace = false;
     for (let i = prefix; i < prefix + addedCount; i++) {
       totalTyped++;
       if (i < currentPassage.length && typed[i] !== currentPassage[i]) {
         mistakes++; // Cumulative error count retained across the session
+        hasMistake = true;
       }
+      if (typed[i] === ' ') isSpace = true;
+    }
+    if (typeof soundEngine !== 'undefined') {
+      if (hasMistake) soundEngine.playError();
+      else soundEngine.playKey(isSpace);
+    }
+  } else if (typed.length < previousTyped.length) {
+    // Backspace / deletion keystroke
+    if (typeof soundEngine !== 'undefined') {
+      soundEngine.playKey(false);
     }
   }
 
@@ -697,3 +717,657 @@ window.addEventListener('keydown', (e) => {
     renderReplayAt(replayCurrentTime);
   }
 });
+
+
+// ==========================================================================
+// ISSUE #42: PROCEDURAL MECHANICAL AUDIO SYNTHESIZER (WEB AUDIO API)
+// ==========================================================================
+
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+    this.enabled = localStorage.getItem('keyrush_sound_enabled') !== 'false';
+    this.profile = localStorage.getItem('keyrush_sound_profile') || 'blue';
+    this.volume = Number(localStorage.getItem('keyrush_sound_volume')) || 0.6;
+    this.typoBuzzer = localStorage.getItem('keyrush_sound_typo') !== 'false';
+  }
+
+  ensureContext() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  setProfile(profile) {
+    this.profile = profile;
+    localStorage.setItem('keyrush_sound_profile', profile);
+  }
+
+  setVolume(vol) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    localStorage.setItem('keyrush_sound_volume', String(this.volume));
+  }
+
+  setEnabled(val) {
+    this.enabled = Boolean(val);
+    localStorage.setItem('keyrush_sound_enabled', String(this.enabled));
+  }
+
+  setTypoBuzzer(val) {
+    this.typoBuzzer = Boolean(val);
+    localStorage.setItem('keyrush_sound_typo', String(this.typoBuzzer));
+  }
+
+  playKey(isSpace = false) {
+    if (!this.enabled || this.volume <= 0) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    if (this.profile === 'blue') {
+      this.synthesizeCherryBlue(isSpace);
+    } else {
+      this.synthesizeCherryBrown(isSpace);
+    }
+  }
+
+  playError() {
+    if (!this.enabled || !this.typoBuzzer || this.volume <= 0) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    this.synthesizeTypoBuzzer();
+  }
+
+  // Synthesize Cherry MX Blue clicky profile (crisp dual-pulse click + release ping)
+  synthesizeCherryBlue(isSpace) {
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.45, t);
+    masterGain.connect(this.ctx.destination);
+
+    if (isSpace) {
+      // Spacebar: deep cavity resonant clack ~130Hz
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(130, t);
+      osc.frequency.exponentialRampToValueAtTime(55, t + 0.038);
+      oscGain.gain.setValueAtTime(0.8, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
+      osc.connect(oscGain);
+      oscGain.connect(masterGain);
+      osc.start(t);
+      osc.stop(t + 0.04);
+    } else {
+      // Primary contact leaf snap (2.4kHz)
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(2400, t);
+      gain1.gain.setValueAtTime(0.65, t);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.009);
+      osc1.connect(gain1);
+      gain1.connect(masterGain);
+      osc1.start(t);
+      osc1.stop(t + 0.01);
+
+      // Delayed secondary release snap (3.2kHz)
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(3200, t + 0.003);
+      gain2.gain.setValueAtTime(0, t);
+      gain2.gain.setValueAtTime(0.5, t + 0.003);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+      osc2.connect(gain2);
+      gain2.connect(masterGain);
+      osc2.start(t + 0.003);
+      osc2.stop(t + 0.016);
+    }
+
+    this.createNoiseTransient(masterGain, isSpace ? 800 : 2000, 0.012, 0.35);
+  }
+
+  // Synthesize Cherry MX Brown tactile profile (gentle bump + soft mechanical thud)
+  synthesizeCherryBrown(isSpace) {
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.4, t);
+    masterGain.connect(this.ctx.destination);
+
+    const freq = isSpace ? 105 : 450;
+    const decay = isSpace ? 0.045 : 0.018;
+
+    const osc = this.ctx.createOscillator();
+    const oscGain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, t + decay);
+    oscGain.gain.setValueAtTime(0.7, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+    osc.connect(oscGain);
+    oscGain.connect(masterGain);
+    osc.start(t);
+    osc.stop(t + decay + 0.002);
+
+    this.createNoiseTransient(masterGain, isSpace ? 600 : 1200, decay * 0.7, 0.25);
+  }
+
+  // Synthesize Typo Buzzer (discordant dyad: 140Hz & 165Hz sawtooth waves)
+  synthesizeTypoBuzzer() {
+    const t = this.ctx.currentTime;
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(this.volume * 0.45, t);
+    masterGain.connect(this.ctx.destination);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(650, t);
+    filter.connect(masterGain);
+
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gainNode = this.ctx.createGain();
+
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(140, t);
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(165, t);
+
+    gainNode.gain.setValueAtTime(0.5, t);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+    osc1.connect(gainNode);
+    osc2.connect(gainNode);
+    gainNode.connect(filter);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + 0.085);
+    osc2.stop(t + 0.085);
+  }
+
+  createNoiseTransient(destination, filterFreq, duration, peakGain) {
+    try {
+      const bufferSize = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(filterFreq, this.ctx.currentTime);
+      filter.Q.setValueAtTime(1.5, this.ctx.currentTime);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(peakGain, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(destination);
+
+      noise.start();
+    } catch (_) {}
+  }
+}
+
+const soundEngine = new SoundEngine();
+
+// ==========================================================================
+// ISSUE #42: MULTI-SOURCE CUSTOM PASSAGE STUDIO
+// ==========================================================================
+
+const CUSTOM_PRESETS = {
+  code: 'async function fetchUserData(userId) { try { const response = await fetch(`/api/users/${userId}`); if (!response.ok) throw new Error("Failed to load user"); const user = await response.json(); return user; } catch (error) { console.error("Error fetching user data:", error); return null; } }',
+  literature: 'It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of some one or other of their daughters.',
+  tech: 'This is the Unix philosophy: Write programs that do one thing and do it well. Write programs to work together. Write programs to handle text streams, because that is a universal interface. Simple algorithms and clean data structures yield robust software.'
+};
+
+function sanitizeCustomPassage(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  return rawText
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[\u201C\u201D\u201E\u201F\u00AB\u00BB]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u2013\u2014\u2015]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function countWords(text) {
+  if (!text || typeof text !== 'string') return 0;
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
+function validatePassage(text) {
+  const sanitized = sanitizeCustomPassage(text);
+  const words = countWords(sanitized);
+  const chars = sanitized.length;
+
+  if (chars === 0) {
+    return { valid: false, words: 0, chars: 0, reason: 'Passage cannot be empty.' };
+  }
+  if (words < 10) {
+    return { valid: false, words, chars, reason: `Enter at least 10 words (${words} entered)` };
+  }
+  if (chars > 3000) {
+    return { valid: false, words, chars, reason: `Exceeds 3000 character limit (${chars} entered)` };
+  }
+  return { valid: true, words, chars, text: sanitized };
+}
+
+// Custom Passage UI Elements
+const customPassageBtn = $('custom-passage-btn');
+const customPassageModal = $('custom-passage-modal');
+const closeCustomPassageBtn = $('close-custom-passage-btn');
+const customPassageInput = $('custom-passage-input');
+const customWordCountEl = $('custom-word-count');
+const customCharCountEl = $('custom-char-count');
+const customValidationMsgEl = $('custom-validation-msg');
+const applyCustomPassageBtn = $('apply-custom-passage-btn');
+const clearCustomInputBtn = $('clear-custom-input-btn');
+const customActiveTag = $('custom-active-tag');
+const clearCustomPassageBtn = $('clear-custom-passage-btn');
+
+const customTabBtns = document.querySelectorAll('.custom-tab-btn');
+const customTabPanels = document.querySelectorAll('.custom-tab-panel');
+const presetChips = document.querySelectorAll('.preset-chip');
+
+// Dropzone & File Upload Elements
+const customDropzone = $('custom-dropzone');
+const customFileInput = $('custom-file-input');
+const fileMetaEl = $('file-meta');
+const fileNameEl = $('file-name');
+const fileSizeEl = $('file-size');
+
+// Voice Dictation Elements
+const voiceRecordBtn = $('voice-record-btn');
+const voiceStatusEl = $('voice-status');
+const voicePreviewEl = $('voice-transcript-preview');
+let voiceRecognition = null;
+let isVoiceRecording = false;
+
+function updateCustomMetrics() {
+  if (!customPassageInput) return;
+  const raw = customPassageInput.value;
+  const sanitized = sanitizeCustomPassage(raw);
+  const words = countWords(sanitized);
+  const chars = sanitized.length;
+
+  if (customWordCountEl) customWordCountEl.textContent = String(words);
+  if (customCharCountEl) customCharCountEl.textContent = String(chars);
+
+  const validation = validatePassage(raw);
+  if (applyCustomPassageBtn) applyCustomPassageBtn.disabled = !validation.valid;
+
+  if (customValidationMsgEl) {
+    if (validation.valid) {
+      customValidationMsgEl.textContent = `Ready (${words} words, ${chars} chars)`;
+      customValidationMsgEl.classList.add('valid');
+    } else {
+      customValidationMsgEl.textContent = validation.reason;
+      customValidationMsgEl.classList.remove('valid');
+    }
+  }
+}
+
+function openCustomPassageModal() {
+  if (!customPassageModal) return;
+  customPassageModal.classList.remove('hidden');
+  updateCustomMetrics();
+  if (customPassageInput) customPassageInput.focus();
+}
+
+function closeCustomPassageModal() {
+  if (!customPassageModal) return;
+  stopVoiceDictation();
+  customPassageModal.classList.add('hidden');
+}
+
+function switchCustomTab(tabKey) {
+  customTabBtns.forEach((btn) => {
+    const isActive = btn.dataset.tab === tabKey;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  });
+
+  customTabPanels.forEach((panel) => {
+    panel.classList.toggle('hidden', panel.id !== `tab-panel-${tabKey}`);
+    panel.classList.toggle('active', panel.id === `tab-panel-${tabKey}`);
+  });
+}
+
+function applyCustomPassage() {
+  if (!customPassageInput) return;
+  const validation = validatePassage(customPassageInput.value);
+  if (!validation.valid) return;
+
+  isCustomPassage = true;
+  customPassageText = validation.text;
+  if (customActiveTag) customActiveTag.classList.remove('hidden');
+
+  closeCustomPassageModal();
+  resetTest();
+  loadPassage();
+}
+
+function clearCustomPassage() {
+  isCustomPassage = false;
+  customPassageText = '';
+  if (customActiveTag) customActiveTag.classList.add('hidden');
+  resetTest();
+  loadPassage();
+}
+
+// File Drag & Drop Handlers
+function handleCustomFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.txt') && file.type && !file.type.includes('text')) {
+    alert('Please upload a plain text (.txt) file.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    if (customPassageInput) {
+      customPassageInput.value = content;
+      updateCustomMetrics();
+    }
+    if (fileMetaEl && fileNameEl && fileSizeEl) {
+      fileNameEl.textContent = file.name;
+      fileSizeEl.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+      fileMetaEl.classList.remove('hidden');
+    }
+    switchCustomTab('type');
+  };
+  reader.readAsText(file);
+}
+
+// Voice Dictation (Web Speech API)
+function initVoiceDictation() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    if (voiceStatusEl) {
+      voiceStatusEl.textContent = 'Voice dictation is not supported in this browser. Please use Chrome/Edge or paste in the Type tab.';
+      voiceStatusEl.style.color = 'var(--wrong)';
+    }
+    if (voiceRecordBtn) voiceRecordBtn.disabled = true;
+    return;
+  }
+
+  voiceRecognition = new SpeechRecognition();
+  voiceRecognition.continuous = true;
+  voiceRecognition.interimResults = true;
+  voiceRecognition.lang = 'en-US';
+
+  voiceRecognition.onstart = () => {
+    isVoiceRecording = true;
+    if (voiceRecordBtn) voiceRecordBtn.classList.add('recording');
+    if (voiceStatusEl) {
+      voiceStatusEl.textContent = 'LISTENING... SPEAK CLEARLY INTO YOUR MICROPHONE';
+      voiceStatusEl.style.color = 'var(--accent)';
+    }
+  };
+
+  voiceRecognition.onresult = (event) => {
+    let interim = '';
+    let finalChunk = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalChunk += transcript + ' ';
+      } else {
+        interim += transcript;
+      }
+    }
+    if (voicePreviewEl) {
+      voicePreviewEl.textContent = (customPassageInput ? customPassageInput.value + ' ' : '') + finalChunk + interim;
+    }
+    if (customPassageInput && finalChunk) {
+      const currentVal = customPassageInput.value.trim();
+      customPassageInput.value = currentVal ? `${currentVal} ${finalChunk.trim()}` : finalChunk.trim();
+      updateCustomMetrics();
+    }
+  };
+
+  voiceRecognition.onerror = (e) => {
+    if (voiceStatusEl) {
+      voiceStatusEl.textContent = `Dictation note: ${e.error || 'Check microphone permissions'}`;
+      voiceStatusEl.style.color = 'var(--wrong)';
+    }
+    stopVoiceDictation();
+  };
+
+  voiceRecognition.onend = () => {
+    stopVoiceDictation();
+  };
+}
+
+function startVoiceDictation() {
+  if (!voiceRecognition) initVoiceDictation();
+  if (voiceRecognition && !isVoiceRecording) {
+    try {
+      voiceRecognition.start();
+    } catch (_) {}
+  }
+}
+
+function stopVoiceDictation() {
+  isVoiceRecording = false;
+  if (voiceRecordBtn) voiceRecordBtn.classList.remove('recording');
+  if (voiceStatusEl && voiceStatusEl.textContent.includes('LISTENING')) {
+    voiceStatusEl.textContent = 'Dictation paused. Click microphone to resume or apply passage.';
+    voiceStatusEl.style.color = 'var(--muted)';
+  }
+  if (voiceRecognition) {
+    try {
+      voiceRecognition.stop();
+    } catch (_) {}
+  }
+}
+
+function toggleVoiceDictation() {
+  if (isVoiceRecording) stopVoiceDictation();
+  else startVoiceDictation();
+}
+
+// Custom Passage Event Listeners
+if (customPassageBtn) customPassageBtn.addEventListener('click', openCustomPassageModal);
+if (closeCustomPassageBtn) closeCustomPassageBtn.addEventListener('click', closeCustomPassageModal);
+if (customPassageModal) {
+  customPassageModal.addEventListener('click', (e) => {
+    if (e.target === customPassageModal) closeCustomPassageModal();
+  });
+}
+
+if (customPassageInput) {
+  customPassageInput.addEventListener('input', updateCustomMetrics);
+}
+
+customTabBtns.forEach((btn) => {
+  btn.addEventListener('click', () => switchCustomTab(btn.dataset.tab));
+});
+
+presetChips.forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const text = CUSTOM_PRESETS[chip.dataset.preset];
+    if (text && customPassageInput) {
+      customPassageInput.value = text;
+      updateCustomMetrics();
+    }
+  });
+});
+
+if (clearCustomInputBtn) {
+  clearCustomInputBtn.addEventListener('click', () => {
+    if (customPassageInput) {
+      customPassageInput.value = '';
+      updateCustomMetrics();
+    }
+    if (fileMetaEl) fileMetaEl.classList.add('hidden');
+    if (voicePreviewEl) voicePreviewEl.textContent = 'Transcript will appear here in real time...';
+  });
+}
+
+if (applyCustomPassageBtn) applyCustomPassageBtn.addEventListener('click', applyCustomPassage);
+if (clearCustomPassageBtn) clearCustomPassageBtn.addEventListener('click', clearCustomPassage);
+
+// Dropzone Listeners
+if (customDropzone && customFileInput) {
+  customDropzone.addEventListener('click', () => customFileInput.click());
+  customFileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) handleCustomFile(e.target.files[0]);
+  });
+  ['dragenter', 'dragover'].forEach((evName) => {
+    customDropzone.addEventListener(evName, (e) => {
+      e.preventDefault();
+      customDropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach((evName) => {
+    customDropzone.addEventListener(evName, (e) => {
+      e.preventDefault();
+      customDropzone.classList.remove('dragover');
+    });
+  });
+  customDropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleCustomFile(e.dataTransfer.files[0]);
+    }
+  });
+}
+
+// Voice Record Button Listener
+if (voiceRecordBtn) voiceRecordBtn.addEventListener('click', toggleVoiceDictation);
+
+// ==========================================================================
+// ISSUE #42: AUDIO FEEDBACK SETTINGS & HUD INTEGRATION
+// ==========================================================================
+
+const audioToggleBtn = $('audio-toggle-btn');
+const audioSettingsBtn = $('audio-settings-btn');
+const audioIconEl = $('audio-icon');
+const audioLabelEl = $('audio-label');
+const audioSettingsModal = $('audio-settings-modal');
+const closeAudioSettingsBtn = $('close-audio-settings-btn');
+const audioMasterSwitch = $('audio-master-switch');
+const audioTypoSwitch = $('audio-typo-switch');
+const audioVolumeSlider = $('audio-volume-slider');
+const audioVolumeVal = $('audio-volume-val');
+const profileCards = document.querySelectorAll('.profile-card');
+
+const testAudioKeyBtn = $('test-audio-key-btn');
+const testAudioSpaceBtn = $('test-audio-space-btn');
+const testAudioErrorBtn = $('test-audio-error-btn');
+
+function updateAudioUI() {
+  const isEnabled = soundEngine.enabled;
+  if (audioIconEl) audioIconEl.textContent = isEnabled ? '🔊' : '🔇';
+  if (audioLabelEl) audioLabelEl.textContent = isEnabled ? 'Sound' : 'Muted';
+  if (audioToggleBtn) {
+    audioToggleBtn.title = isEnabled ? 'Audio feedback enabled (Ctrl+M to mute)' : 'Audio feedback muted (Ctrl+M to unmute)';
+  }
+  if (audioMasterSwitch) audioMasterSwitch.checked = isEnabled;
+  if (audioTypoSwitch) audioTypoSwitch.checked = soundEngine.typoBuzzer;
+  if (audioVolumeSlider) audioVolumeSlider.value = String(Math.round(soundEngine.volume * 100));
+  if (audioVolumeVal) audioVolumeVal.textContent = `${Math.round(soundEngine.volume * 100)}%`;
+
+  profileCards.forEach((card) => {
+    card.classList.toggle('active', card.dataset.profile === soundEngine.profile);
+  });
+}
+
+function openAudioSettings() {
+  if (!audioSettingsModal) return;
+  updateAudioUI();
+  audioSettingsModal.classList.remove('hidden');
+}
+
+function closeAudioSettings() {
+  if (!audioSettingsModal) return;
+  audioSettingsModal.classList.add('hidden');
+}
+
+if (audioToggleBtn) {
+  audioToggleBtn.addEventListener('click', () => {
+    soundEngine.setEnabled(!soundEngine.enabled);
+    updateAudioUI();
+  });
+}
+
+if (audioSettingsBtn) audioSettingsBtn.addEventListener('click', openAudioSettings);
+if (closeAudioSettingsBtn) closeAudioSettingsBtn.addEventListener('click', closeAudioSettings);
+if (audioSettingsModal) {
+  audioSettingsModal.addEventListener('click', (e) => {
+    if (e.target === audioSettingsModal) closeAudioSettings();
+  });
+}
+
+if (audioMasterSwitch) {
+  audioMasterSwitch.addEventListener('change', (e) => {
+    soundEngine.setEnabled(e.target.checked);
+    updateAudioUI();
+  });
+}
+
+if (audioTypoSwitch) {
+  audioTypoSwitch.addEventListener('change', (e) => {
+    soundEngine.setTypoBuzzer(e.target.checked);
+    updateAudioUI();
+  });
+}
+
+if (audioVolumeSlider) {
+  audioVolumeSlider.addEventListener('input', (e) => {
+    const val = Number(e.target.value) / 100;
+    soundEngine.setVolume(val);
+    updateAudioUI();
+  });
+}
+
+profileCards.forEach((card) => {
+  card.addEventListener('click', () => {
+    soundEngine.setProfile(card.dataset.profile);
+    updateAudioUI();
+    soundEngine.playKey(false);
+  });
+});
+
+if (testAudioKeyBtn) testAudioKeyBtn.addEventListener('click', () => soundEngine.playKey(false));
+if (testAudioSpaceBtn) testAudioSpaceBtn.addEventListener('click', () => soundEngine.playKey(true));
+if (testAudioErrorBtn) testAudioErrorBtn.addEventListener('click', () => soundEngine.playError());
+
+// Global Hotkeys: Ctrl+M to toggle audio, Escape to close modals
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+    e.preventDefault();
+    soundEngine.setEnabled(!soundEngine.enabled);
+    updateAudioUI();
+  } else if (e.key === 'Escape') {
+    if (customPassageModal && !customPassageModal.classList.contains('hidden')) {
+      closeCustomPassageModal();
+    }
+    if (audioSettingsModal && !audioSettingsModal.classList.contains('hidden')) {
+      closeAudioSettings();
+    }
+  }
+});
+
+// Initialize Audio UI state on page load
+updateAudioUI();
