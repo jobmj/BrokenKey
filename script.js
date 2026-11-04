@@ -27,6 +27,7 @@ const passageEl = $('passage'),
 
 const timeBtns = document.querySelectorAll('.time-btn');
 let currentPassage = '',
+  previousTyped = '',
   charIndex = 0,
   charStates = [],
   mistakes = 0,
@@ -200,6 +201,7 @@ function recordGraphSample() {
 function loadPassage() {
   currentPassage = passages[Math.floor(Math.random() * passages.length)];
   charIndex = 0;
+  previousTyped = '';
   charStates = new Array(currentPassage.length).fill('');
   inputEl.value = '';
   inputEl.maxLength = currentPassage.length;
@@ -226,35 +228,45 @@ function escapeHTML(value) {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+// Backspace enabled: allows deleting characters and making corrections
 inputEl.addEventListener('keydown', (event) => {
-  if (event.key === 'Backspace') event.preventDefault();
+  // Native backspace enabled for natural typing and replay telemetry
 });
 
 inputEl.addEventListener('input', () => {
   const typed = inputEl.value;
 
-  totalTyped = 0;
-  correctTyped = 0;
-  mistakes = 0;
-  charIndex = 0;
-  charStates = [];
-
-  while (charIndex < typed.length && charIndex < currentPassage.length) {
-    totalTyped++;
-
-    const typedChar = typed[charIndex];
-    const targetChar = currentPassage[charIndex];
-
-    if (typedChar === targetChar) {
-      correctTyped++;
-      charStates[charIndex] = 'correct';
-    } else {
-      mistakes++;
-      charStates[charIndex] = 'wrong';
-    }
-
-    charIndex++;
+  // Track inserted characters: mistakes accumulate permanently and do not clear on Backspace
+  let prefix = 0;
+  while (prefix < previousTyped.length && prefix < typed.length && previousTyped[prefix] === typed[prefix]) {
+    prefix++;
   }
+
+  // If characters were added (forward typing)
+  if (typed.length > previousTyped.length) {
+    const addedCount = typed.length - previousTyped.length;
+    for (let i = prefix; i < prefix + addedCount; i++) {
+      totalTyped++;
+      if (i < currentPassage.length && typed[i] !== currentPassage[i]) {
+        mistakes++; // Cumulative error count retained across the session
+      }
+    }
+  }
+
+  // Update current visual state of passage
+  correctTyped = 0;
+  charStates = new Array(currentPassage.length).fill('');
+  for (let i = 0; i < typed.length && i < currentPassage.length; i++) {
+    if (typed[i] === currentPassage[i]) {
+      correctTyped++;
+      charStates[i] = 'correct';
+    } else {
+      charStates[i] = 'wrong';
+    }
+  }
+
+  charIndex = typed.length;
+  previousTyped = typed;
 
   updateHeatmap();
   renderPassage();
@@ -275,8 +287,9 @@ inputEl.addEventListener('input', () => {
 
 function calculateWPM() {
   if (!startTime) return 0;
-  const elapsedMin = (Date.now() - startTime) / 60000;
-  if (elapsedMin <= 0) return 0;
+  const elapsedSec = (Date.now() - startTime) / 1000;
+  if (elapsedSec < 1.0) return 0; // Warmup guard to prevent division-by-near-zero spike
+  const elapsedMin = elapsedSec / 60;
   return Math.round(totalTyped / 5 / elapsedMin);
 }
 
@@ -368,6 +381,7 @@ function resetTest() {
   startTime = null;
   charIndex = 0;
   mistakes = 0;
+  previousTyped = '';
   totalTyped = 0;
   correctTyped = 0;
   timeLeft = timeLimit;
