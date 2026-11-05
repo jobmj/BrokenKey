@@ -11,6 +11,7 @@ const $ = (id) => (isBrowser ? document.getElementById(id) : null);
 const passageEl = $('passage'),
   inputEl = $('typing-input'),
   timeEl = $('time'),
+  timeStatLabelEl = $('time-stat-label'),
   wpmEl = $('wpm'),
   accuracyEl = $('accuracy'),
   mistakesEl = $('mistakes'),
@@ -449,10 +450,14 @@ function calculateAccuracy() {
 }
 
 function updateStats() {
-  wpmEl.textContent = calculateWPM();
-  accuracyEl.textContent = `${calculateAccuracy()}%`;
-  mistakesEl.textContent = mistakes;
-  timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
+  if (wpmEl) wpmEl.textContent = calculateWPM();
+  if (accuracyEl) accuracyEl.textContent = `${calculateAccuracy()}%`;
+  if (mistakesEl) mistakesEl.textContent = mistakes;
+  if (timeEl) timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
+  const timeLabel = $('time-stat-label');
+  if (timeLabel) {
+    timeLabel.textContent = timeLimit === 0 ? 'Time elapsed' : 'Time left';
+  }
 }
 
 function startTimer() {

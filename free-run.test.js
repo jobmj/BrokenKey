@@ -122,6 +122,8 @@ describe('Production Free Run Mode (Issue #41)', () => {
 
     assert.equal(prod.getTimeLimit(), 0, 'timeLimit must be 0 for Free Run');
     assert.equal(prod.getTimeLeft(), 0, 'timeLeft must start at 0 in Free Run mode');
+    const label = globalThis.document.getElementById('time-stat-label');
+    assert.equal(label.textContent, 'Time elapsed', 'Label must switch to "Time elapsed" in Free Run mode');
   });
 
   test('Mode Switching: switching back from Free Run to timed mode (15s/30s/60s) updates timeLeft correctly', () => {
@@ -134,6 +136,8 @@ describe('Production Free Run Mode (Issue #41)', () => {
     prod.resetTest();
     assert.equal(prod.getTimeLimit(), 15);
     assert.equal(prod.getTimeLeft(), 15, 'timeLeft must be 15 when switched to 15s mode');
+    const label = globalThis.document.getElementById('time-stat-label');
+    assert.equal(label.textContent, 'Time left', 'Label must switch to "Time left" in timed mode');
 
     // Switch to 60s
     prod.setTimeLimit(60);
