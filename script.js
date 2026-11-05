@@ -424,7 +424,8 @@ function handleInput(event) {
     });
   }
 
-  if (charIndex === currentPassage.length) finishTest();
+  const isPassageComplete = charIndex === currentPassage.length && charStates[currentPassage.length - 1] === 'correct';
+  if (isPassageComplete) finishTest();
 }
 
 if (inputEl) {

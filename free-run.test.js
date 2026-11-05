@@ -262,4 +262,30 @@ describe('Production Free Run Mode (Issue #41)', () => {
     assert.ok(summary.includes('Completed in'), 'Result summary must format completion time');
     assert.ok(summary.includes('WPM'), 'Result summary must calculate WPM on typed portion');
   });
+
+  test('Last Character Correction: mistyping the final character does not lock input, allowing Backspace correction', () => {
+    prod.setTimeLimit(0);
+    prod.resetTest();
+    prod.setTestPassage('Finish line.');
+    prod.setTestTyping(true);
+
+    const state = prod.getTestState();
+    // User types 'Finish linex' (last char 'x' is typo instead of '.')
+    if (state.inputEl) {
+      state.inputEl.value = 'Finish linex';
+    }
+    prod.handleInput({ inputType: 'insertText' });
+
+    // isTyping must remain true so user can Backspace and fix it!
+    assert.equal(prod.getTestState().isTyping, true, 'isTyping must remain true when last character is a typo');
+
+    // User corrects it by typing '.'
+    if (state.inputEl) {
+      state.inputEl.value = 'Finish line.';
+    }
+    prod.handleInput({ inputType: 'insertText' });
+
+    // Now that last character is correct, it auto-finishes!
+    assert.equal(prod.getTestState().isTyping, false, 'isTyping must be false once final character is correct');
+  });
 });
