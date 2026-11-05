@@ -531,12 +531,13 @@ function finishTest() {
   lastResultSummary = '';
   const elapsedSecStr = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : timeLeft;
   const errorLabel = mistakes === 1 ? 'error' : 'errors';
+  const cleanTag = mistakes === 0 ? ' (Clean run)' : '';
   if (timeLimit === 0) {
     lastResultSummary =
-      `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${breakdownStr}`;
+      `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
   } else {
     lastResultSummary =
-      `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${breakdownStr}`;
+      `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
   }
 
   if (resultEl) {

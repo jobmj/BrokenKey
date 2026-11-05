@@ -288,4 +288,18 @@ describe('Production Free Run Mode (Issue #41)', () => {
     // Now that last character is correct, it auto-finishes!
     assert.equal(prod.getTestState().isTyping, false, 'isTyping must be false once final character is correct');
   });
+
+  test('All Green Clean Run: 0 errors displays "(Clean run)" in results card', () => {
+    prod.setTimeLimit(0);
+    prod.resetTest();
+    prod.setTestPassage('Flawless test.');
+    prod.setTestTyping(true);
+    prod.setStartTime(Date.now() - 5000);
+    prod.setTestMistakes(0);
+
+    prod.finishTest();
+
+    const summary = prod.getLastResultSummary();
+    assert.ok(summary.includes('(Clean run)'), 'Zero mistakes must include "(Clean run)" tag');
+  });
 });
