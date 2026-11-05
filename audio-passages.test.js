@@ -1,85 +1,139 @@
-import { test, describe } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Core Business Logic: Text Sanitization & Validation for Custom Passages
-export function sanitizeCustomPassage(rawText) {
-  if (!rawText || typeof rawText !== 'string') return '';
-  return rawText
-    // Remove unprintable ASCII control characters (keep printable range 0x20 - 0x7E + unicode)
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Normalize smart / curly double quotes to ASCII double quote
-    .replace(/[\u201C\u201D\u201E\u201F\u00AB\u00BB]/g, '"')
-    // Normalize smart / curly single quotes and apostrophes
-    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-    // Normalize em-dashes and en-dashes to hyphen
-    .replace(/[\u2013\u2014\u2015]/g, '-')
-    // Normalize ellipsis
-    .replace(/\u2026/g, '...')
-    // Replace newlines, carriage returns, and tabs with single space
-    .replace(/[\r\n\t]+/g, ' ')
-    // Collapse multiple consecutive spaces into a single space
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+// Directly exercise actual production code from script.js
+import {
+  SoundEngine,
+  sanitizeCustomPassage,
+  countWords,
+  validatePassage,
+  CUSTOM_PRESETS
+} from './script.js';
+
+// In-memory mock storage for exercising production persistence
+class MockLocalStorage {
+  constructor() {
+    this.store = {};
+  }
+  getItem(key) {
+    return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
+  }
+  setItem(key, value) {
+    this.store[key] = String(value);
+  }
+  removeItem(key) {
+    delete this.store[key];
+  }
+  clear() {
+    this.store = {};
+  }
 }
 
-export function countWords(text) {
-  if (!text || typeof text !== 'string') return 0;
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
-}
+describe('Production SoundEngine: Volume Persistence & Profile State', () => {
+  let originalLocalStorage;
 
-export function validatePassage(text) {
-  const sanitized = sanitizeCustomPassage(text);
-  const words = countWords(sanitized);
-  const chars = sanitized.length;
+  beforeEach(() => {
+    originalLocalStorage = globalThis.localStorage;
+    globalThis.localStorage = new MockLocalStorage();
+  });
 
-  if (chars === 0) {
-    return { valid: false, words: 0, chars: 0, reason: 'Passage cannot be empty.' };
-  }
-  if (words < 10) {
-    return { valid: false, words, chars, reason: `Passage requires at least 10 words (currently ${words}).` };
-  }
-  if (chars > 3000) {
-    return { valid: false, words, chars, reason: `Passage exceeds maximum limit of 3000 characters (currently ${chars}).` };
-  }
-  return { valid: true, words, chars, text: sanitized };
-}
+  afterEach(() => {
+    globalThis.localStorage = originalLocalStorage;
+  });
 
-// Procedural Audio Engine Parameter Constants
-export const AUDIO_PROFILES = {
-  blue: {
-    name: 'Cherry MX Blue',
-    clickFreq1: 2400,
-    clickFreq2: 3200,
-    snapDecay: 0.008,
-    spaceFreq: 130,
-    spaceDecay: 0.035
-  },
-  brown: {
-    name: 'Cherry MX Brown',
-    thudFreq: 450,
-    thudDecay: 0.018,
-    spaceFreq: 105,
-    spaceDecay: 0.045
-  }
-};
+  test('Volume persistence edge case: volume set to 0 remains 0 upon initialization (no fallback to 0.6)', () => {
+    globalThis.localStorage.setItem('keyrush_sound_volume', '0');
+    const engine = new SoundEngine();
+    assert.equal(engine.volume, 0, 'Volume must be 0 when saved as 0, not 0.6');
+  });
 
-export const ERROR_TONE = {
-  freq: 140,
-  dissonanceFreq: 165,
-  decay: 0.08
-};
+  test('setVolume(0) stores "0" in localStorage and preserves 0 value', () => {
+    const engine = new SoundEngine();
+    engine.setVolume(0);
+    assert.equal(engine.volume, 0);
+    assert.equal(globalThis.localStorage.getItem('keyrush_sound_volume'), '0');
 
-describe('Custom Passage Sanitization & Validation Engine', () => {
-  test('Sanitizes smart quotes, apostrophes, and unicode dashes to standard ASCII', () => {
+    // Reconstruct new instance simulating page reload
+    const reloadedEngine = new SoundEngine();
+    assert.equal(reloadedEngine.volume, 0, 'Volume must persist as 0 after reload');
+  });
+
+  test('Default volume falls back to 0.6 only when no stored preference exists', () => {
+    const engine = new SoundEngine();
+    assert.equal(engine.volume, 0.6);
+  });
+
+  test('Arbitrary valid volume values are properly persisted and retrieved', () => {
+    const engine = new SoundEngine();
+    engine.setVolume(0.45);
+    assert.equal(engine.volume, 0.45);
+    assert.equal(globalThis.localStorage.getItem('keyrush_sound_volume'), '0.45');
+
+    const reloaded = new SoundEngine();
+    assert.equal(reloaded.volume, 0.45);
+  });
+
+  test('Clamps volume within [0, 1] range', () => {
+    const engine = new SoundEngine();
+    engine.setVolume(1.8);
+    assert.equal(engine.volume, 1.0);
+
+    engine.setVolume(-0.4);
+    assert.equal(engine.volume, 0.0);
+  });
+
+  test('Switches and persists sound profiles between blue and brown', () => {
+    const engine = new SoundEngine();
+    assert.equal(engine.profile, 'blue');
+
+    engine.setProfile('brown');
+    assert.equal(engine.profile, 'brown');
+    assert.equal(globalThis.localStorage.getItem('keyrush_sound_profile'), 'brown');
+
+    const reloaded = new SoundEngine();
+    assert.equal(reloaded.profile, 'brown');
+
+    engine.setProfile('blue');
+    assert.equal(engine.profile, 'blue');
+  });
+
+  test('Toggles and persists mute / audio enabled status', () => {
+    const engine = new SoundEngine();
+    assert.equal(engine.enabled, true);
+
+    engine.setEnabled(false);
+    assert.equal(engine.enabled, false);
+    assert.equal(globalThis.localStorage.getItem('keyrush_sound_enabled'), 'false');
+
+    const reloaded = new SoundEngine();
+    assert.equal(reloaded.enabled, false);
+
+    engine.setEnabled(true);
+    assert.equal(engine.enabled, true);
+  });
+
+  test('Toggles and persists typo buzzer dissonance preference', () => {
+    const engine = new SoundEngine();
+    assert.equal(engine.typoBuzzer, true);
+
+    engine.setTypoBuzzer(false);
+    assert.equal(engine.typoBuzzer, false);
+    assert.equal(globalThis.localStorage.getItem('keyrush_sound_typo'), 'false');
+
+    const reloaded = new SoundEngine();
+    assert.equal(reloaded.typoBuzzer, false);
+  });
+});
+
+describe('Production Custom Passage: Sanitization & Text Processing', () => {
+  test('Sanitizes smart/curly quotes, apostrophes, and unicode dashes to standard ASCII', () => {
     const raw = '“The greatest glory in living lies not in never falling—but in rising every time we fall.” – Nelson Mandela';
     const clean = sanitizeCustomPassage(raw);
     assert.equal(clean, '"The greatest glory in living lies not in never falling-but in rising every time we fall." - Nelson Mandela');
   });
 
-  test('Strips unprintable control characters and collapses redundant whitespace and newlines', () => {
-    const raw = "First line.\n\n\tSecond line\x00 with   irregular   spaces.\r\nThird line.";
+  test('Strips unprintable ASCII control characters and collapses irregular whitespace/newlines', () => {
+    const raw = "First line.\n\n\tSecond line\x00 with   irregular   spaces.\r\nThird line.\x1F";
     const clean = sanitizeCustomPassage(raw);
     assert.equal(clean, "First line. Second line with irregular spaces. Third line.");
   });
@@ -90,22 +144,24 @@ describe('Custom Passage Sanitization & Validation Engine', () => {
     assert.equal(countWords('   One   two   three   '), 3);
     assert.equal(countWords(''), 0);
   });
+});
 
+describe('Production Custom Passage: Validation Boundaries & Presets', () => {
   test('Rejects passages with fewer than 10 words', () => {
     const shortText = 'This sentence is far too short to test.';
     const result = validatePassage(shortText);
     assert.equal(result.valid, false);
-    assert.match(result.reason, /at least 10 words/);
+    assert.match(result.reason, /at least 10 words/i);
   });
 
   test('Rejects passages exceeding 3000 characters', () => {
     const longText = 'word '.repeat(650); // > 3250 characters
     const result = validatePassage(longText);
     assert.equal(result.valid, false);
-    assert.match(result.reason, /exceeds maximum limit/);
+    assert.match(result.reason, /exceeds 3000 character limit/i);
   });
 
-  test('Accepts valid passages meeting all criteria', () => {
+  test('Accepts valid custom passages meeting all criteria', () => {
     const validText = 'The quick brown fox jumps over the lazy dog while developers build open source projects together.';
     const result = validatePassage(validText);
     assert.equal(result.valid, true);
@@ -113,20 +169,14 @@ describe('Custom Passage Sanitization & Validation Engine', () => {
     assert.ok(result.chars <= 3000);
     assert.equal(result.text, validText);
   });
-});
 
-describe('Procedural Web Audio Engine Specification', () => {
-  test('Contains valid audio profile acoustics configurations', () => {
-    assert.ok(AUDIO_PROFILES.blue);
-    assert.ok(AUDIO_PROFILES.brown);
-    assert.equal(AUDIO_PROFILES.blue.clickFreq1, 2400);
-    assert.equal(AUDIO_PROFILES.blue.clickFreq2, 3200);
-    assert.equal(AUDIO_PROFILES.brown.thudFreq, 450);
-  });
+  test('All production presets (code, literature, tech) are valid passages', () => {
+    assert.ok(CUSTOM_PRESETS.code, 'code preset must exist');
+    assert.ok(CUSTOM_PRESETS.literature, 'literature preset must exist');
+    assert.ok(CUSTOM_PRESETS.tech, 'tech preset must exist');
 
-  test('Error buzzer tone utilizes low-frequency dissonant interval', () => {
-    assert.equal(ERROR_TONE.freq, 140);
-    assert.equal(ERROR_TONE.dissonanceFreq, 165);
-    assert.ok(ERROR_TONE.decay <= 0.1);
+    assert.equal(validatePassage(CUSTOM_PRESETS.code).valid, true);
+    assert.equal(validatePassage(CUSTOM_PRESETS.literature).valid, true);
+    assert.equal(validatePassage(CUSTOM_PRESETS.tech).valid, true);
   });
 });

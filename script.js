@@ -6,7 +6,8 @@ const passages = [
   "Technology is best when it brings people together.\n\nSimple things should be simple, complex things should be possible, and every mistake is just a lesson wearing a disguise."
 ];
 
-const $ = (id) => document.getElementById(id);
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+const $ = (id) => (isBrowser ? document.getElementById(id) : null);
 const passageEl = $('passage'),
   inputEl = $('typing-input'),
   timeEl = $('time'),
@@ -25,7 +26,7 @@ const passageEl = $('passage'),
   chartCanvas = $('wpm-chart'),
   keyboardEl = $('keyboard-layout');
 
-const timeBtns = document.querySelectorAll('.time-btn');
+const timeBtns = isBrowser ? document.querySelectorAll('.time-btn') : [];
 let currentPassage = '',
   previousTyped = '',
   charIndex = 0,
@@ -39,8 +40,8 @@ let currentPassage = '',
   timeLimit = 30,
   startTime = null;
 
-let bestWPM = Number(localStorage.getItem('keyrush-best-wpm')) || 0;
-bestEl.textContent = bestWPM;
+let bestWPM = (typeof localStorage !== 'undefined' && Number(localStorage.getItem('keyrush-best-wpm'))) || 0;
+if (bestEl) bestEl.textContent = bestWPM;
 
 // Live WPM Graph
 let wpmHistory = [];
@@ -233,11 +234,12 @@ function escapeHTML(value) {
 }
 
 // Backspace enabled: allows deleting characters and making corrections
-inputEl.addEventListener('keydown', (event) => {
-  // Native backspace enabled for natural typing and replay telemetry
-});
+if (inputEl) {
+  inputEl.addEventListener('keydown', (event) => {
+    // Native backspace enabled for natural typing and replay telemetry
+  });
 
-inputEl.addEventListener('input', () => {
+  inputEl.addEventListener('input', () => {
   const typed = inputEl.value;
 
   // Track inserted characters: mistakes accumulate permanently and do not clear on Backspace
@@ -300,7 +302,8 @@ inputEl.addEventListener('input', () => {
   }
 
     if (charIndex === currentPassage.length) finishTest();
-});
+  });
+}
 
 function calculateWPM() {
   if (!startTime) return 0;
@@ -417,19 +420,25 @@ function resetTest() {
   if (typeof closeReplayModal === 'function') closeReplayModal();
 }
 
-startBtn.addEventListener('click', () => {
-  if (isTyping) return;
-  inputEl.disabled = false;
-  inputEl.focus();
-  startBtn.disabled = true;
-  if (!timer) startTimer();
-});
+if (startBtn) {
+  startBtn.addEventListener('click', () => {
+    if (isTyping) return;
+    if (inputEl) {
+      inputEl.disabled = false;
+      inputEl.focus();
+    }
+    startBtn.disabled = true;
+    if (!timer) startTimer();
+  });
+}
 
-resetBtn.addEventListener('click', resetTest);
-nextBtn.addEventListener('click', () => {
-  resetTest();
-  loadPassage();
-});
+if (resetBtn) resetBtn.addEventListener('click', resetTest);
+if (nextBtn) {
+  nextBtn.addEventListener('click', () => {
+    resetTest();
+    loadPassage();
+  });
+}
 
 timeBtns.forEach((btn) =>
   btn.addEventListener('click', () => {
@@ -440,27 +449,32 @@ timeBtns.forEach((btn) =>
   })
 );
 
-themeBtn.addEventListener('click', () => {
-  document.body.classList.toggle('light-mode');
-  themeBtn.innerHTML = document.body.classList.contains('light-mode')
-    ? '☾ <span>Dark mode</span>'
-    : '☼ <span>Light mode</span>';
-  
-});
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-mode');
+    themeBtn.innerHTML = document.body.classList.contains('light-mode')
+      ? '☾ <span>Dark mode</span>'
+      : '☼ <span>Light mode</span>';
+  });
+}
 
-ghostBtn.addEventListener('click', () => {
-  window.location.href = 'ghost.html';
-});
+if (ghostBtn) {
+  ghostBtn.addEventListener('click', () => {
+    window.location.href = 'ghost.html';
+  });
+}
 
-initKeyboard();
-initGraph();
-loadPassage();
-updateStats();
+if (isBrowser) {
+  initKeyboard();
+  initGraph();
+  loadPassage();
+  updateStats();
+}
 
 
 // Decorative WASD interaction: hover and press feedback, separate from typing-test state.
 const wasdTip = $('wasd-tip');
-document.querySelectorAll('.wasd-key').forEach((key) => {
+if (isBrowser) document.querySelectorAll('.wasd-key').forEach((key) => {
   key.addEventListener('mouseenter', () => { wasdTip.textContent = key.dataset.tip; });
   key.addEventListener('mouseleave', () => {
     if (!key.classList.contains('key-active')) wasdTip.textContent = 'HOVER / PRESS A KEY';
@@ -508,7 +522,7 @@ const replayWpmEl = $('replay-wpm');
 const replayErrorsEl = $('replay-errors');
 const replayStatusEl = $('replay-status');
 const scrubberTimestampEl = $('scrubber-timestamp');
-const speedBtns = document.querySelectorAll('.speed-btn');
+const speedBtns = isBrowser ? document.querySelectorAll('.speed-btn') : [];
 
 function initReplaySession() {
   if (!sessionReplayEvents.length || !replayModal) return;
@@ -694,7 +708,7 @@ speedBtns.forEach((btn) => {
 });
 
 // Keyboard Accessibility inside Replay Modal
-window.addEventListener('keydown', (e) => {
+if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
   if (!replayModal || replayModal.classList.contains('hidden')) return;
 
   if (e.key === 'Escape') {
@@ -723,14 +737,20 @@ window.addEventListener('keydown', (e) => {
 class SoundEngine {
   constructor() {
     this.ctx = null;
-    this.enabled = localStorage.getItem('keyrush_sound_enabled') !== 'false';
-    this.profile = localStorage.getItem('keyrush_sound_profile') || 'blue';
-    this.volume = Number(localStorage.getItem('keyrush_sound_volume')) || 0.6;
-    this.typoBuzzer = localStorage.getItem('keyrush_sound_typo') !== 'false';
+    const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+    this.enabled = storage ? storage.getItem('keyrush_sound_enabled') !== 'false' : true;
+    this.profile = storage ? (storage.getItem('keyrush_sound_profile') || 'blue') : 'blue';
+    
+    // Volume persistence fix: 0 is a valid volume and must not fall back to 0.6
+    const savedVol = storage ? storage.getItem('keyrush_sound_volume') : null;
+    this.volume = (savedVol !== null && !isNaN(Number(savedVol))) ? Math.max(0, Math.min(1, Number(savedVol))) : 0.6;
+    
+    this.typoBuzzer = storage ? storage.getItem('keyrush_sound_typo') !== 'false' : true;
+    this.lastSoundTime = 0;
   }
 
   ensureContext() {
-    if (!this.ctx) {
+    if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
@@ -743,22 +763,30 @@ class SoundEngine {
 
   setProfile(profile) {
     this.profile = profile;
-    localStorage.setItem('keyrush_sound_profile', profile);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('keyrush_sound_profile', profile);
+    }
   }
 
   setVolume(vol) {
-    this.volume = Math.max(0, Math.min(1, vol));
-    localStorage.setItem('keyrush_sound_volume', String(this.volume));
+    this.volume = Math.max(0, Math.min(1, Number(vol)));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('keyrush_sound_volume', String(this.volume));
+    }
   }
 
   setEnabled(val) {
     this.enabled = Boolean(val);
-    localStorage.setItem('keyrush_sound_enabled', String(this.enabled));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('keyrush_sound_enabled', String(this.enabled));
+    }
   }
 
   setTypoBuzzer(val) {
     this.typoBuzzer = Boolean(val);
-    localStorage.setItem('keyrush_sound_typo', String(this.typoBuzzer));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('keyrush_sound_typo', String(this.typoBuzzer));
+    }
   }
 
   playKey(isSpace = false) {
@@ -1018,9 +1046,9 @@ const clearCustomInputBtn = $('clear-custom-input-btn');
 const customActiveTag = $('custom-active-tag');
 const clearCustomPassageBtn = $('clear-custom-passage-btn');
 
-const customTabBtns = document.querySelectorAll('.custom-tab-btn');
-const customTabPanels = document.querySelectorAll('.custom-tab-panel');
-const presetChips = document.querySelectorAll('.preset-chip');
+const customTabBtns = isBrowser ? document.querySelectorAll('.custom-tab-btn') : [];
+const customTabPanels = isBrowser ? document.querySelectorAll('.custom-tab-panel') : [];
+const presetChips = isBrowser ? document.querySelectorAll('.preset-chip') : [];
 
 // Dropzone & File Upload Elements
 const customDropzone = $('custom-dropzone');
@@ -1032,7 +1060,7 @@ const fileSizeEl = $('file-size');
 // Voice Dictation Elements
 const voiceRecordBtn = $('voice-record-btn');
 const voiceStatusEl = $('voice-status');
-const voiceMeterEl = document.querySelector('.voice-activity-meter');
+const voiceMeterEl = isBrowser ? document.querySelector('.voice-activity-meter') : null;
 let voiceRecognition = null;
 let isVoiceRecording = false;
 let shouldKeepVoiceListening = false;
@@ -1357,7 +1385,7 @@ const audioMasterSwitch = $('audio-master-switch');
 const audioTypoSwitch = $('audio-typo-switch');
 const audioVolumeSlider = $('audio-volume-slider');
 const audioVolumeVal = $('audio-volume-val');
-const profileCards = document.querySelectorAll('.profile-card');
+const profileCards = isBrowser ? document.querySelectorAll('.profile-card') : [];
 
 const testAudioKeyBtn = $('test-audio-key-btn');
 const testAudioSpaceBtn = $('test-audio-space-btn');
@@ -1441,7 +1469,7 @@ if (testAudioSpaceBtn) testAudioSpaceBtn.addEventListener('click', () => soundEn
 if (testAudioErrorBtn) testAudioErrorBtn.addEventListener('click', () => soundEngine.playError());
 
 // Global Hotkeys: Ctrl+M to toggle audio, Escape to close modals
-window.addEventListener('keydown', (e) => {
+if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
     e.preventDefault();
     soundEngine.setEnabled(!soundEngine.enabled);
@@ -1458,3 +1486,15 @@ window.addEventListener('keydown', (e) => {
 
 // Initialize Audio UI state on page load
 updateAudioUI();
+
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    SoundEngine,
+    soundEngine,
+    sanitizeCustomPassage,
+    countWords,
+    validatePassage,
+    CUSTOM_PRESETS
+  };
+}
