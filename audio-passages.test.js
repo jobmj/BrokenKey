@@ -7,7 +7,8 @@ import {
   sanitizeCustomPassage,
   countWords,
   validatePassage,
-  CUSTOM_PRESETS
+  CUSTOM_PRESETS,
+  isValidTxtFile
 } from './script.js';
 
 // In-memory mock storage for exercising production persistence
@@ -123,6 +124,25 @@ describe('Production SoundEngine: Volume Persistence & Profile State', () => {
     const reloaded = new SoundEngine();
     assert.equal(reloaded.typoBuzzer, false);
   });
+
+  test('playError() contains audio repeat throttle cooldown to prevent buzzer node flooding', () => {
+    const engine = new SoundEngine();
+    assert.equal(engine.lastErrorSoundTime, 0);
+
+    // Mock AudioContext to test throttle timing
+    let synthesizeCount = 0;
+    engine.synthesizeTypoBuzzer = () => { synthesizeCount++; };
+    engine.ctx = { currentTime: 0 };
+
+    engine.playError();
+    assert.equal(synthesizeCount, 1);
+    const firstCallTime = engine.lastErrorSoundTime;
+    assert.ok(firstCallTime > 0);
+
+    // Immediate second call within 45ms must be throttled
+    engine.playError();
+    assert.equal(synthesizeCount, 1, 'Rapid repeated playError must be throttled');
+  });
 });
 
 describe('Production Custom Passage: Sanitization & Text Processing', () => {
@@ -178,5 +198,15 @@ describe('Production Custom Passage: Validation Boundaries & Presets', () => {
     assert.equal(validatePassage(CUSTOM_PRESETS.code).valid, true);
     assert.equal(validatePassage(CUSTOM_PRESETS.literature).valid, true);
     assert.equal(validatePassage(CUSTOM_PRESETS.tech).valid, true);
+  });
+
+  test('Strict .txt file validation: accepts .txt files only and rejects .csv or other formats', () => {
+    assert.equal(isValidTxtFile({ name: 'passage.txt' }), true);
+    assert.equal(isValidTxtFile({ name: 'NOTES.TXT' }), true);
+    assert.equal(isValidTxtFile({ name: 'data.csv' }), false, 'Must reject .csv files');
+    assert.equal(isValidTxtFile({ name: 'document.pdf' }), false, 'Must reject .pdf files');
+    assert.equal(isValidTxtFile({ name: 'script.json' }), false, 'Must reject .json files');
+    assert.equal(isValidTxtFile(null), false);
+    assert.equal(isValidTxtFile({}), false);
   });
 });

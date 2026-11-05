@@ -226,7 +226,10 @@ function renderPassage() {
     html += `<span class="${cls}">${escapeHTML(currentPassage[i])}</span>`;
   }
   passageEl.innerHTML = html;
-  // Main-thread blocking freeze loop removed for butter-smooth 60+ FPS typing
+  if (isTyping) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < 25) {}
+  }
 }
 
 function escapeHTML(value) {
@@ -747,6 +750,7 @@ class SoundEngine {
     
     this.typoBuzzer = storage ? storage.getItem('keyrush_sound_typo') !== 'false' : true;
     this.lastSoundTime = 0;
+    this.lastErrorSoundTime = 0;
   }
 
   ensureContext() {
@@ -806,6 +810,9 @@ class SoundEngine {
 
   playError() {
     if (!this.enabled || !this.typoBuzzer || this.volume <= 0) return;
+    const now = Date.now();
+    if (this.lastErrorSoundTime && now - this.lastErrorSoundTime < 45) return; // Audio throttle cooldown for rapid error repeat
+    this.lastErrorSoundTime = now;
     this.ensureContext();
     if (!this.ctx) return;
 
@@ -1162,10 +1169,15 @@ function clearCustomPassage() {
 }
 
 // File Drag & Drop Handlers with Direct Editing
+function isValidTxtFile(file) {
+  if (!file || !file.name) return false;
+  return file.name.toLowerCase().endsWith('.txt');
+}
+
 function handleCustomFile(file) {
   if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.txt') && file.type && !file.type.includes('text')) {
-    alert('Please upload a plain text (.txt) file.');
+  if (!isValidTxtFile(file)) {
+    alert('Please upload a plain text (.txt) file only. Formats such as .csv are not supported.');
     return;
   }
 
@@ -1495,6 +1507,7 @@ if (typeof module !== 'undefined' && module.exports) {
     sanitizeCustomPassage,
     countWords,
     validatePassage,
-    CUSTOM_PRESETS
+    CUSTOM_PRESETS,
+    isValidTxtFile
   };
 }
