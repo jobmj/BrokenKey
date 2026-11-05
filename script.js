@@ -1177,7 +1177,7 @@ function isValidTxtFile(file) {
 function handleCustomFile(file) {
   if (!file) return;
   if (!isValidTxtFile(file)) {
-    alert('Please upload a plain text (.txt) file only. Formats such as .csv are not supported.');
+    alert('Please upload a .txt file only.');
     return;
   }
 
