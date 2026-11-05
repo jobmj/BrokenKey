@@ -17,6 +17,7 @@ const passageEl = $('passage'),
   bestEl = $('best'),
   resultEl = $('result'),
   startBtn = $('start-btn'),
+  stopBtn = $('stop-btn'),
   resetBtn = $('reset-btn'),
   nextBtn = $('next-btn'),
   replayBtn = $('replay-btn'),
@@ -459,6 +460,7 @@ function startTimer() {
   timeLeft = timeLimit === 0 ? 0 : timeLimit;
   sessionReplayEvents = [{ t: 0, val: '', cursor: 0, wpm: 0, errors: 0 }];
   if (replayBtn) replayBtn.classList.add('hidden');
+  if (stopBtn) stopBtn.classList.remove('hidden');
   statusEl.textContent = timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS';
   wpmHistory = [{ time: 0, wpm: 0 }];
   drawGraph();
@@ -489,8 +491,9 @@ function finishTest() {
 
   timer = null;
   isTyping = false;
-  inputEl.disabled = true;
-  startBtn.disabled = false;
+  if (inputEl) inputEl.disabled = true;
+  if (startBtn) startBtn.disabled = false;
+  if (stopBtn) stopBtn.classList.add('hidden');
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 
@@ -582,6 +585,7 @@ function resetTest() {
   renderPassage();
   updateStats();
   if (startBtn) startBtn.disabled = false;
+  if (stopBtn) stopBtn.classList.add('hidden');
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 }
@@ -595,6 +599,17 @@ if (startBtn) {
     }
     startBtn.disabled = true;
     if (!timer) startTimer();
+  });
+}
+
+if (stopBtn) {
+  stopBtn.addEventListener('click', () => {
+    if (!isTyping) return;
+    if (totalTyped === 0) {
+      resetTest();
+      return;
+    }
+    finishTest();
   });
 }
 

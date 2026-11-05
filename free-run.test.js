@@ -244,4 +244,22 @@ describe('Production Free Run Mode (Issue #41)', () => {
     const calculatedWPM = prod.calculateWPM();
     assert.equal(calculatedWPM, 60, 'Calculated WPM over 2 minutes should be 60');
   });
+
+  test('Stop Button: allows user to finish run early and calculate score on partially typed text', () => {
+    prod.setTimeLimit(0);
+    prod.resetTest();
+    prod.setTestPassage('This is a longer passage that the user stops halfway.');
+    prod.setTestTyping(true);
+    prod.setStartTime(Date.now() - 5000); // 5s elapsed
+    prod.setTestTotalTyped(50); // typed 50 characters (10 words)
+    prod.setTestCorrectTyped(50);
+
+    // Call finishTest directly simulating stop button action
+    prod.finishTest();
+
+    assert.equal(prod.getTestState().isTyping, false, 'isTyping must be false after stopping early');
+    const summary = prod.getLastResultSummary();
+    assert.ok(summary.includes('Completed in'), 'Result summary must format completion time');
+    assert.ok(summary.includes('WPM'), 'Result summary must calculate WPM on typed portion');
+  });
 });
