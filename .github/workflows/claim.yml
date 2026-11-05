@@ -144,7 +144,31 @@ jobs:
               console.log('Search warning (ignoring if rate-limited):', err.message);
             }
 
-            // 4. Assign the participant with Tiered Deadline
+            // 4. Enforce 5-PR Repository Cap
+            try {
+              const repoOwner = context.repo.owner;
+              const repoName = context.repo.repo;
+              const prSearch = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${repoOwner}/${repoName} is:pr is:closed author:${user} label:soc-s1`
+              });
+
+              const mergedPRs = (prSearch.data.items || []).filter(
+                (item) => item.pull_request && item.pull_request.merged_at
+              );
+
+              if (mergedPRs.length >= 5 && !isUserMaintainer) {
+                await github.rest.issues.createComment({
+                  ...context.repo,
+                  issue_number: issueNumber,
+                  body: `🛡️ @${user} **Repository Cap Reached (5/5 PRs):**\n\nYou have already merged **${mergedPRs.length} PRs** in \`${repoName}\`!\n\nPer FOSSSoC Season 1 rules, each participant can earn points for a maximum of **5 PRs per repository**.\n\nTo keep issues available for your peers and continue earning points for yourself, please pick an issue in another project (e.g., [BrokenKey](https://github.com/${repoOwner}/BrokenKey), [Cyber-Security-Simulator](https://github.com/${repoOwner}/Cyber-Security-Simulator), or [pingpanda](https://github.com/${repoOwner}/pingpanda)).\n\n*(Note: If you want to contribute purely for open-source without points, a mentor can assign you manually).*`
+                });
+                return;
+              }
+            } catch (err) {
+              console.log('Repo cap check warning (ignoring if rate-limited):', err.message);
+            }
+
+            // 5. Assign the participant with Tiered Deadline
             const isEasy = labels.includes('level:easy');
             const deadlineDays = isEasy ? 3 : 5;
             const deadlineHours = deadlineDays * 24;

@@ -1,15 +1,18 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 // Directly exercise actual production code from script.js
-import {
+const {
   SoundEngine,
   sanitizeCustomPassage,
   countWords,
   validatePassage,
   CUSTOM_PRESETS,
   isValidTxtFile
-} from './script.js';
+} = require('./script.js');
 
 // In-memory mock storage for exercising production persistence
 class MockLocalStorage {

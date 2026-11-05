@@ -1,3 +1,4 @@
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 // KeyRush — Modern Typing Speed Test & Performance Analytics.
 const passages = [
   "The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump!",
@@ -6,7 +7,6 @@ const passages = [
   "Technology is best when it brings people together.\n\nSimple things should be simple, complex things should be possible, and every mistake is just a lesson wearing a disguise."
 ];
 
-const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 const $ = (id) => (isBrowser ? document.getElementById(id) : null);
 const passageEl = $('passage'),
   inputEl = $('typing-input'),
@@ -28,7 +28,6 @@ const passageEl = $('passage'),
 
 const timeBtns = isBrowser ? document.querySelectorAll('.time-btn') : [];
 let currentPassage = '',
-  previousTyped = '',
   charIndex = 0,
   charStates = [],
   mistakes = 0,
@@ -47,12 +46,66 @@ if (bestEl) bestEl.textContent = bestWPM;
 let wpmHistory = [];
 const chartCtx = chartCanvas && chartCanvas.getContext ? chartCanvas.getContext('2d') : null;
 
-// Per-Key Keyboard Heatmap
+// Per-Key Keyboard Heatmap and Mistake Tracking
+let keyMistakes = {};
+let keySubstitutions = {};
+let lastTrackedKeydownPos = -1;
+let lastProcessedLength = 0;
+
+function resolvePhysicalKey(code, key = '') {
+  if (code) {
+    if (code === 'Space') return 'SPACE';
+    if (code === 'Enter') return 'ENTER';
+    if (code.startsWith('Key') && code.length === 4) return code.slice(3).toUpperCase();
+    if (code.startsWith('Digit') && code.length === 6) return code.slice(5);
+    if (code === 'BracketLeft') return '[';
+    if (code === 'BracketRight') return ']';
+    if (code === 'Quote') return "'";
+    if (code === 'Backquote') return '`';
+    if (code === 'Backslash') return '\\';
+    if (code === 'Slash') return '/';
+    if (code === 'Semicolon') return ';';
+    if (code === 'Comma') return ',';
+    if (code === 'Period') return '.';
+    if (code === 'Minus') return '-';
+    if (code === 'Equal') return '=';
+  }
+  // Fallback for virtual / mobile keyboards without physical code
+  if (key === ' ') return 'SPACE';
+  if (key === '\n' || key === 'Enter') return 'ENTER';
+  if (typeof key === 'string' && key.length === 1) return key.toUpperCase();
+  return null;
+}
+
+function resolveExpectedKey(char) {
+  if (!char) return null;
+  if (char === ' ') return 'SPACE';
+  if (char === '\n') return 'ENTER';
+  return char.toUpperCase();
+}
+
+function recordSubstitution(expectedKey, pressedKey) {
+  if (!expectedKey || !pressedKey || expectedKey === pressedKey) return;
+  if (!keySubstitutions[expectedKey]) {
+    keySubstitutions[expectedKey] = {};
+  }
+  keySubstitutions[expectedKey][pressedKey] = (keySubstitutions[expectedKey][pressedKey] || 0) + 1;
+}
+
+function getTopSubstitution(expectedKey) {
+  const map = keySubstitutions[expectedKey];
+  if (!map) return null;
+  const entries = Object.entries(map);
+  if (entries.length === 0) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return { pressedKey: entries[0][0], count: entries[0][1] };
+}
+
 const KEYBOARD_ROWS = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
   ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
   ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
-  ['SPACE']
+  ['SPACE', 'ENTER']
 ];
 
 function initKeyboard() {
@@ -62,8 +115,11 @@ function initKeyboard() {
     html += '<div class="kb-row">';
     row.forEach((key) => {
       const isSpace = key === 'SPACE';
-      const label = isSpace ? 'Space' : key;
-      const keyClass = isSpace ? 'kb-key kb-space' : 'kb-key';
+      const isEnter = key === 'ENTER';
+      let label = key;
+      if (isSpace) label = 'Space';
+      if (isEnter) label = 'Enter';
+      const keyClass = isSpace ? 'kb-key kb-space' : (isEnter ? 'kb-key kb-enter' : 'kb-key');
       html += `<div class="${keyClass}" data-key="${key}"><span class="kb-char">${label}</span><span class="kb-err">0</span></div>`;
     });
     html += '</div>';
@@ -71,34 +127,43 @@ function initKeyboard() {
   keyboardEl.innerHTML = html;
 }
 
+function getHeatmapIntensity(errCount) {
+  if (!errCount || errCount <= 0) return 'intensity-0';
+  if (errCount <= 2) return 'intensity-1';
+  if (errCount <= 5) return 'intensity-2';
+  if (errCount <= 9) return 'intensity-3';
+  return 'intensity-4';
+}
+
 function updateHeatmap(reset = false) {
   if (!keyboardEl) return;
   const keyEls = keyboardEl.querySelectorAll('.kb-key');
   if (reset) {
+    keyMistakes = {};
+    keySubstitutions = {};
+    lastTrackedKeydownPos = -1;
+    lastProcessedLength = 0;
     keyEls.forEach((el) => {
       const isSpace = el.dataset.key === 'SPACE';
-      el.className = isSpace ? 'kb-key kb-space intensity-0' : 'kb-key intensity-0';
+      const isEnter = el.dataset.key === 'ENTER';
+      const baseClass = isSpace ? 'kb-key kb-space' : (isEnter ? 'kb-key kb-enter' : 'kb-key');
+      el.className = baseClass + ' intensity-0';
       const errEl = el.querySelector('.kb-err');
       if (errEl) errEl.textContent = '0';
     });
     return;
   }
 
-  const intensities = ['intensity-1', 'intensity-2', 'intensity-3', 'intensity-4'];
   keyEls.forEach((el) => {
-    if (Math.random() < 0.35) {
-      const level = Math.floor(Math.random() * intensities.length);
-      const randomErrCount = Math.floor(Math.random() * 12) + 1;
-      const isSpace = el.dataset.key === 'SPACE';
-      el.className = (isSpace ? 'kb-key kb-space ' : 'kb-key ') + intensities[level];
-      const errEl = el.querySelector('.kb-err');
-      if (errEl) errEl.textContent = randomErrCount;
-    } else {
-      const isSpace = el.dataset.key === 'SPACE';
-      el.className = isSpace ? 'kb-key kb-space intensity-0' : 'kb-key intensity-0';
-      const errEl = el.querySelector('.kb-err');
-      if (errEl) errEl.textContent = '0';
-    }
+    const rawKey = el.dataset.key;
+    const count = keyMistakes[rawKey] || 0;
+    const isSpace = rawKey === 'SPACE';
+    const isEnter = rawKey === 'ENTER';
+    const baseClass = isSpace ? 'kb-key kb-space ' : (isEnter ? 'kb-key kb-enter ' : 'kb-key ');
+    const intensity = getHeatmapIntensity(count);
+    el.className = baseClass + intensity;
+    const errEl = el.querySelector('.kb-err');
+    if (errEl) errEl.textContent = count;
   });
 }
 
@@ -194,8 +259,9 @@ function recordGraphSample() {
     drawGraph();
     return;
   }
-  const sampleWPM = Math.floor(Math.sin(elapsedSec * 0.7) * 16 + 68 + (Math.random() - 0.5) * 18);
-  wpmHistory.push({ time: elapsedSec, wpm: Math.max(12, sampleWPM) });
+  const elapsedMin = elapsedSec / 60;
+  const currentWPM = elapsedMin > 0 ? Math.round((correctTyped / 5) / elapsedMin) : 0;
+  wpmHistory.push({ time: elapsedSec, wpm: Math.max(0, currentWPM) });
   drawGraph();
 }
 
@@ -209,10 +275,11 @@ function loadPassage() {
     currentPassage = passages[Math.floor(Math.random() * passages.length)];
   }
   charIndex = 0;
-  previousTyped = '';
   charStates = new Array(currentPassage.length).fill('');
-  inputEl.value = '';
-  inputEl.maxLength = currentPassage.length;
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.maxLength = currentPassage.length;
+  }
   renderPassage();
 }
 
@@ -226,86 +293,138 @@ function renderPassage() {
     html += `<span class="${cls}">${escapeHTML(currentPassage[i])}</span>`;
   }
   passageEl.innerHTML = html;
-  if (isTyping) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < 25) {}
-  }
 }
 
 function escapeHTML(value) {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-// Backspace enabled: allows deleting characters and making corrections
-if (inputEl) {
-  inputEl.addEventListener('keydown', (event) => {
-    // Native backspace enabled for natural typing and replay telemetry
-  });
+let isPasting = false;
+let pasteResetTimeout = null;
 
-  inputEl.addEventListener('input', () => {
-  const typed = inputEl.value;
+function handlePaste() {
+  isPasting = true;
+  clearTimeout(pasteResetTimeout);
+  pasteResetTimeout = setTimeout(() => {
+    isPasting = false;
+  }, 100);
+}
 
-  // Track inserted characters: mistakes accumulate permanently and do not clear on Backspace
-  let prefix = 0;
-  while (prefix < previousTyped.length && prefix < typed.length && previousTyped[prefix] === typed[prefix]) {
-    prefix++;
+function handleKeyDown(event) {
+  // Allow default Backspace behavior so users can correct typos (coordinates with PR #36)
+  if (event.key === 'Backspace') {
+    return;
   }
 
-  // If characters were added (forward typing)
-  if (typed.length > previousTyped.length) {
-    const addedCount = typed.length - previousTyped.length;
-    let hasMistake = false;
-    let isSpace = false;
-    for (let i = prefix; i < prefix + addedCount; i++) {
-      totalTyped++;
-      if (i < currentPassage.length && typed[i] !== currentPassage[i]) {
-        mistakes++; // Cumulative error count retained across the session
-        hasMistake = true;
+  // Ignore modifier combinations (shortcuts like Ctrl+C, Cmd+V)
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Ignore non-printable keys (Shift, CapsLock, Tab, Arrow keys)
+  if (event.key.length > 1 && event.key !== 'Enter') return;
+
+  if (!isTyping || !currentPassage) return;
+  const currentPos = (inputEl && typeof inputEl.selectionStart === 'number')
+    ? inputEl.selectionStart
+    : inputEl.value.length;
+  if (currentPos >= currentPassage.length) return;
+
+  const expectedChar = currentPassage[currentPos];
+  const expectedKey = resolveExpectedKey(expectedChar);
+  const pressedKey = resolvePhysicalKey(event.code, event.key);
+  const typedChar = event.key === 'Enter' ? '\n' : event.key;
+
+  if (typedChar !== expectedChar) {
+    // Cumulative error count for this expected target key
+    keyMistakes[expectedKey] = (keyMistakes[expectedKey] || 0) + 1;
+    if (pressedKey) {
+      recordSubstitution(expectedKey, pressedKey);
+    }
+    lastTrackedKeydownPos = currentPos;
+    updateHeatmap();
+  }
+}
+
+function handleInput(event) {
+  const typed = inputEl.value;
+  const wasPasted = Boolean(
+    isPasting ||
+    (event && (event.inputType === 'insertFromPaste' || event.inputType === 'insertReplacementText')) ||
+    (typed.length - lastProcessedLength > 1)
+  );
+  isPasting = false;
+  clearTimeout(pasteResetTimeout);
+
+  // Procedural mechanical sound feedback (Issue #42)
+  if (typeof soundEngine !== 'undefined' && !wasPasted) {
+    if (typed.length > lastProcessedLength) {
+      const newlyTypedChar = typed[typed.length - 1];
+      const targetPos = typed.length - 1;
+      const isTypo = targetPos < currentPassage.length && newlyTypedChar !== currentPassage[targetPos];
+      if (isTypo) {
+        soundEngine.playError();
+      } else {
+        soundEngine.playKey(newlyTypedChar === ' ');
       }
-      if (typed[i] === ' ') isSpace = true;
-    }
-    if (typeof soundEngine !== 'undefined') {
-      if (hasMistake) soundEngine.playError();
-      else soundEngine.playKey(isSpace);
-    }
-  } else if (typed.length < previousTyped.length) {
-    // Backspace / deletion keystroke
-    if (typeof soundEngine !== 'undefined') {
+    } else if (typed.length < lastProcessedLength) {
       soundEngine.playKey(false);
     }
   }
 
-  // Update current visual state of passage
+  totalTyped = 0;
   correctTyped = 0;
+  mistakes = 0;
+  charIndex = 0;
   charStates = new Array(currentPassage.length).fill('');
-  for (let i = 0; i < typed.length && i < currentPassage.length; i++) {
-    if (typed[i] === currentPassage[i]) {
+
+  while (charIndex < typed.length && charIndex < currentPassage.length) {
+    totalTyped++;
+
+    const typedChar = typed[charIndex];
+    const targetChar = currentPassage[charIndex];
+
+    if (typedChar === targetChar) {
       correctTyped++;
-      charStates[i] = 'correct';
+      charStates[charIndex] = 'correct';
     } else {
-      charStates[i] = 'wrong';
+      mistakes++;
+      charStates[charIndex] = 'wrong';
+
+      // Fallback for virtual keyboards without keydown events
+      // Pasted input is validated against the passage, but MUST NOT be recorded as physical keystrokes or substitutions
+      if (!wasPasted && charIndex > lastTrackedKeydownPos && charIndex >= lastProcessedLength) {
+        const targetKey = resolveExpectedKey(targetChar);
+        const fallbackPressed = resolvePhysicalKey(null, typedChar);
+        keyMistakes[targetKey] = (keyMistakes[targetKey] || 0) + 1;
+        if (fallbackPressed) {
+          recordSubstitution(targetKey, fallbackPressed);
+        }
+      }
     }
+
+    charIndex++;
   }
 
-  charIndex = typed.length;
-  previousTyped = typed;
-
+  lastProcessedLength = typed.length;
   updateHeatmap();
   renderPassage();
   updateStats();
 
-  if (isTyping && startTime) {
+  if (isTyping && startTime && typeof sessionReplayEvents !== 'undefined') {
     sessionReplayEvents.push({
       t: Date.now() - startTime,
       val: typed,
-      cursor: inputEl.selectionStart || typed.length,
+      cursor: (inputEl && inputEl.selectionStart !== undefined) ? inputEl.selectionStart : typed.length,
       wpm: calculateWPM(),
       errors: mistakes
     });
   }
 
-    if (charIndex === currentPassage.length) finishTest();
-  });
+  if (charIndex === currentPassage.length) finishTest();
+}
+
+if (inputEl) {
+  inputEl.addEventListener('paste', handlePaste);
+  inputEl.addEventListener('keydown', handleKeyDown);
+  inputEl.addEventListener('input', handleInput);
 }
 
 function calculateWPM() {
@@ -377,9 +496,23 @@ function finishTest() {
     localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
   }
 
+  const worstKeys = Object.entries(keyMistakes)
+    .filter(([k, cnt]) => cnt > 0 && k !== 'SPACE')
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  let breakdownStr = '';
+  if (worstKeys.length > 0) {
+    const details = worstKeys.map(([k, cnt]) => {
+      const topSub = getTopSubstitution(k);
+      return topSub ? `${k} (${cnt}x, confused with ${topSub.pressedKey})` : `${k} (${cnt}x)`;
+    });
+    breakdownStr = ` · Weak keys: ${details.join(', ')}`;
+  }
+
   resultEl.classList.remove('hidden');
   resultEl.textContent =
-    `Test complete · ${finalWPM} WPM · ${mistakes} errors`;
+    `Test complete · ${finalWPM} WPM · ${mistakes} errors${breakdownStr}`;
 
   if (startTime) {
     sessionReplayEvents.push({
@@ -401,10 +534,11 @@ function resetTest() {
   clearInterval(timer);
   timer = null;
   isTyping = false;
+  isPasting = false;
+  clearTimeout(pasteResetTimeout);
   startTime = null;
   charIndex = 0;
   mistakes = 0;
-  previousTyped = '';
   totalTyped = 0;
   correctTyped = 0;
   timeLeft = timeLimit;
@@ -443,27 +577,33 @@ if (nextBtn) {
   });
 }
 
-timeBtns.forEach((btn) =>
-  btn.addEventListener('click', () => {
-    timeBtns.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    timeLimit = Number(btn.dataset.time);
-    resetTest();
-  })
-);
+if (timeBtns && timeBtns.forEach) {
+  timeBtns.forEach((btn) =>
+    btn.addEventListener('click', () => {
+      timeBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      timeLimit = Number(btn.dataset.time);
+      resetTest();
+    })
+  );
+}
 
 if (themeBtn) {
   themeBtn.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    themeBtn.innerHTML = document.body.classList.contains('light-mode')
-      ? '☾ <span>Dark mode</span>'
-      : '☼ <span>Light mode</span>';
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.toggle('light-mode');
+      themeBtn.innerHTML = document.body.classList.contains('light-mode')
+        ? '☾ <span>Dark mode</span>'
+        : '☼ <span>Light mode</span>';
+    }
   });
 }
 
 if (ghostBtn) {
   ghostBtn.addEventListener('click', () => {
-    window.location.href = 'ghost.html';
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.href = 'ghost.html';
+    }
   });
 }
 
@@ -474,24 +614,25 @@ if (isBrowser) {
   updateStats();
 }
 
-
 // Decorative WASD interaction: hover and press feedback, separate from typing-test state.
 const wasdTip = $('wasd-tip');
-if (isBrowser) document.querySelectorAll('.wasd-key').forEach((key) => {
-  key.addEventListener('mouseenter', () => { wasdTip.textContent = key.dataset.tip; });
-  key.addEventListener('mouseleave', () => {
-    if (!key.classList.contains('key-active')) wasdTip.textContent = 'HOVER / PRESS A KEY';
+if (isBrowser && typeof document !== 'undefined' && document.querySelectorAll) {
+  document.querySelectorAll('.wasd-key').forEach((key) => {
+    key.addEventListener('mouseenter', () => { if (wasdTip) wasdTip.textContent = key.dataset.tip; });
+    key.addEventListener('mouseleave', () => {
+      if (wasdTip && !key.classList.contains('key-active')) wasdTip.textContent = 'HOVER / PRESS A KEY';
+    });
+    key.addEventListener('focus', () => { if (wasdTip) wasdTip.textContent = key.dataset.tip; });
+    key.addEventListener('blur', () => {
+      if (wasdTip && !key.classList.contains('key-active')) wasdTip.textContent = 'HOVER / PRESS A KEY';
+    });
+    key.addEventListener('click', () => {
+      document.querySelectorAll('.wasd-key').forEach((other) => other.classList.remove('key-active'));
+      key.classList.add('key-active');
+      if (wasdTip) wasdTip.textContent = key.dataset.tip + ' ✓';
+    });
   });
-  key.addEventListener('focus', () => { wasdTip.textContent = key.dataset.tip; });
-  key.addEventListener('blur', () => {
-    if (!key.classList.contains('key-active')) wasdTip.textContent = 'HOVER / PRESS A KEY';
-  });
-  key.addEventListener('click', () => {
-    document.querySelectorAll('.wasd-key').forEach((other) => other.classList.remove('key-active'));
-    key.classList.add('key-active');
-    wasdTip.textContent = key.dataset.tip + ' ✓';
-  });
-});
+}
 
 
 // Header-strip feature buttons jump to the new analytics cards.
@@ -499,7 +640,6 @@ if (isBrowser) document.querySelectorAll('.wasd-key').forEach((key) => {
   const btn = $(btnId), card = $(cardId);
   if (btn && card) btn.addEventListener('click', () => card.scrollIntoView({ behavior: 'smooth', block: 'center' }));
 });
-
 
 // =============================================================
 // KEYRUSH SESSION REPLAY & TIMELINE SCRUBBER ENGINE (ISSUE #38)
@@ -711,26 +851,28 @@ speedBtns.forEach((btn) => {
 });
 
 // Keyboard Accessibility inside Replay Modal
-if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
-  if (!replayModal || replayModal.classList.contains('hidden')) return;
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('keydown', (e) => {
+    if (!replayModal || replayModal.classList.contains('hidden')) return;
 
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    closeReplayModal();
-  } else if (e.key === ' ' || e.code === 'Space') {
-    // Prevent scrolling while inside replay modal
-    e.preventDefault();
-    toggleReplayPlayback();
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault();
-    replayCurrentTime = Math.max(0, replayCurrentTime - 1000);
-    renderReplayAt(replayCurrentTime);
-  } else if (e.key === 'ArrowRight') {
-    e.preventDefault();
-    replayCurrentTime = Math.min(replayDuration, replayCurrentTime + 1000);
-    renderReplayAt(replayCurrentTime);
-  }
-});
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeReplayModal();
+    } else if (e.key === ' ' || e.code === 'Space') {
+      // Prevent scrolling while inside replay modal
+      e.preventDefault();
+      toggleReplayPlayback();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      replayCurrentTime = Math.max(0, replayCurrentTime - 1000);
+      renderReplayAt(replayCurrentTime);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      replayCurrentTime = Math.min(replayDuration, replayCurrentTime + 1000);
+      renderReplayAt(replayCurrentTime);
+    }
+  });
+}
 
 
 // ==========================================================================
@@ -1067,7 +1209,9 @@ const fileSizeEl = $('file-size');
 // Voice Dictation Elements
 const voiceRecordBtn = $('voice-record-btn');
 const voiceStatusEl = $('voice-status');
-const voiceMeterEl = isBrowser ? document.querySelector('.voice-activity-meter') : null;
+const voiceMeterEl = (typeof document !== 'undefined' && typeof document.querySelector === 'function')
+  ? document.querySelector('.voice-activity-meter')
+  : null;
 let voiceRecognition = null;
 let isVoiceRecording = false;
 let shouldKeepVoiceListening = false;
@@ -1500,8 +1644,37 @@ if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
 updateAudioUI();
 
 
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    passages,
+    resolvePhysicalKey,
+    resolveExpectedKey,
+    recordSubstitution,
+    getTopSubstitution,
+    getHeatmapIntensity,
+    calculateWPM,
+    calculateAccuracy,
+    updateHeatmap,
+    resetTest,
+    finishTest,
+    handleKeyDown,
+    handleInput,
+    handlePaste,
+    getTestState: () => ({
+      keyMistakes,
+      keySubstitutions,
+      charStates,
+      charIndex,
+      mistakes,
+      correctTyped,
+      totalTyped,
+      isTyping,
+      currentPassage,
+      inputEl
+    }),
+    setTestPassage: (p) => { currentPassage = p; },
+    setTestTyping: (v) => { isTyping = v; },
     SoundEngine,
     soundEngine,
     sanitizeCustomPassage,

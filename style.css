@@ -175,6 +175,10 @@ footer{align-items:center}.foss-credit{display:flex;align-items:center;gap:10px}
   min-width: 220px;
 }
 
+.kb-enter {
+  min-width: 72px;
+}
+
 .kb-char {
   display: block;
 }
@@ -224,6 +228,7 @@ footer{align-items:center}.foss-credit{display:flex;align-items:center;gap:10px}
 @media (max-width:768px){
   .kb-key{min-width:30px;height:38px;font-size:.72rem}
   .kb-space{min-width:140px}
+  .kb-enter{min-width:54px}
 }
 
 /* ===== GHOST MODE DESIGN ===== */
