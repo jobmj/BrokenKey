@@ -40,6 +40,8 @@ let currentPassage = '',
   timeLeft = 30,
   timeLimit = 30,
   startTime = null;
+  let testState = 'READY';   // 'READY' | 'RUNNING' | 'COMPLETED'
+let finishTimeout = null;
 
 let lastResultSummary = '';
 
@@ -352,6 +354,7 @@ function handleKeyDown(event) {
 
 function handleInput(event) {
   const typed = inputEl.value;
+  if (testState === 'READY' && !isTyping && typed.length > 0) startTest();
   const wasPasted = Boolean(
     isPasting ||
     (event && (event.inputType === 'insertFromPaste' || event.inputType === 'insertReplacementText')) ||
@@ -460,7 +463,16 @@ function updateStats() {
   }
 }
 
+function startTest() {
+  if (testState !== 'READY') return;   // guarantees one start per test
+  testState = 'RUNNING';
+  inputEl.disabled = false;
+  startBtn.disabled = true;
+  startTimer();
+}
+
 function startTimer() {
+  clearInterval(timer);
   isTyping = true;
   startTime = Date.now();
   timeLeft = timeLimit === 0 ? 0 : timeLimit;
@@ -481,7 +493,7 @@ function startTimer() {
       if (timeLeft <= 0) {
         timeLeft = 0;
         clearInterval(timer);
-        setTimeout(finishTest, 120);
+        finishTimeout = setTimeout(finishTest, 120);
       }
       timeEl.innerHTML = `${timeLeft}<span class="unit">s</span>`;
       wpmEl.textContent = calculateWPM();
@@ -492,8 +504,11 @@ function startTimer() {
 
 
 function finishTest() {
-  if (!isTyping) return;
+  if (testState === 'COMPLETED' || !isTyping) return;
+  testState = 'COMPLETED';
   if (timer) clearInterval(timer);
+  clearTimeout(finishTimeout);
+  finishTimeout = null;
 
   timer = null;
   isTyping = false;
@@ -568,6 +583,9 @@ function finishTest() {
 
 function resetTest() {
   clearInterval(timer);
+  clearTimeout(finishTimeout);
+finishTimeout = null;
+testState = 'READY';
   timer = null;
   isTyping = false;
   isPasting = false;
@@ -581,7 +599,7 @@ function resetTest() {
   timeLeft = timeLimit === 0 ? 0 : timeLimit;
   if (inputEl) {
     inputEl.value = '';
-    inputEl.disabled = true;
+    inputEl.disabled = false;
   }
   charStates = new Array(currentPassage.length).fill('');
   if (resultEl) resultEl.classList.add('hidden');
@@ -599,13 +617,10 @@ function resetTest() {
 
 if (startBtn) {
   startBtn.addEventListener('click', () => {
-    if (isTyping) return;
-    if (inputEl) {
-      inputEl.disabled = false;
-      inputEl.focus();
-    }
-    startBtn.disabled = true;
-    if (!timer) startTimer();
+    if (testState === 'COMPLETED') resetTest();
+    if (testState !== 'READY') return;
+    startTest();
+    if (inputEl) inputEl.focus();
   });
 }
 
@@ -1721,6 +1736,7 @@ if (typeof module !== 'undefined' && module.exports) {
     handleKeyDown,
     handleInput,
     handlePaste,
+    startTest,
     getTestState: () => ({
       keyMistakes,
       keySubstitutions,
@@ -1730,6 +1746,7 @@ if (typeof module !== 'undefined' && module.exports) {
       correctTyped,
       totalTyped,
       isTyping,
+      testState,
       currentPassage,
       inputEl
     }),
