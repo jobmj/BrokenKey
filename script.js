@@ -436,6 +436,18 @@ if (inputEl) {
   inputEl.addEventListener('paste', handlePaste);
   inputEl.addEventListener('keydown', handleKeyDown);
   inputEl.addEventListener('input', handleInput);
+  inputEl.addEventListener('focus', () => {
+    if (typeof soundEngine !== 'undefined') soundEngine.ensureContext();
+  });
+  inputEl.addEventListener('pointerdown', () => {
+    if (typeof soundEngine !== 'undefined') soundEngine.ensureContext();
+  });
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('pointerdown', () => {
+    if (typeof soundEngine !== 'undefined') soundEngine.ensureContext();
+  }, { once: true });
 }
 
 function calculateWPM() {
