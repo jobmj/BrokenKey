@@ -491,4 +491,32 @@ describe('Production Peer Challenge Protocol & Ghost Cursor Pacer', () => {
 
     prod.exitChallenge();
   });
+
+  test('Race Against Yourself / Record: locks pacer to personal record time or toggles off', async () => {
+    prod.resetTest();
+    prod.setTestPassage('The quick brown fox jumps over the lazy dog.');
+
+    // 1. With established best WPM (e.g. 88 WPM)
+    prod.setBestWPM(88);
+    await prod.raceAgainstRecord();
+
+    let active = prod.getActiveChallenge();
+    assert.ok(active !== null, 'Active challenge must be initialized');
+    assert.equal(active.wpm, 88, 'Should lock to personal best 88 WPM');
+    assert.ok(active.challenger.includes('Personal Best (88 WPM)'));
+
+    // 2. Toggle off when clicked while already racing personal best
+    await prod.raceAgainstRecord();
+    assert.equal(prod.getActiveChallenge(), null, 'Clicking again toggles race off');
+
+    // 3. Fallback when bestWPM is 0
+    prod.setBestWPM(0);
+    await prod.raceAgainstRecord();
+    active = prod.getActiveChallenge();
+    assert.ok(active !== null);
+    assert.equal(active.wpm, 50, 'Falls back to 50 WPM pacer when no record is set');
+    assert.ok(active.challenger.includes('50 WPM'));
+
+    prod.exitChallenge();
+  });
 });

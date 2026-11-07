@@ -2033,6 +2033,54 @@ body.light-mode .profile-card {
   font-weight: 900;
 }
 
+.race-record-btn {
+  background: rgba(214, 255, 53, 0.05);
+  border: 1px solid rgba(214, 255, 53, 0.35);
+  color: var(--accent);
+  transition: background 0.12s, color 0.12s, transform 0.12s, border-color 0.12s;
+}
+
+.race-record-btn:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--accent);
+}
+
+.race-record-btn.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 900;
+  box-shadow: 3px 3px 0 #252a1f;
+}
+
+.race-record-btn .soon {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.race-record-btn:hover .soon,
+.race-record-btn.active .soon {
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+body.light-mode .race-record-btn {
+  background: rgba(142, 179, 0, 0.08);
+  border-color: #7a9c00;
+  color: #3b4417;
+}
+
+body.light-mode .race-record-btn:hover,
+body.light-mode .race-record-btn.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: #3b4417;
+}
+
 /* Subtitle Terminal Strip */
 .subtitle {
   display: flex;

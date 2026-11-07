@@ -26,6 +26,8 @@ const passageEl = $('passage'),
   statusEl = $('status-label'),
   themeBtn = $('theme-btn'),
   ghostBtn = $('ghost-btn'),
+  raceRecordBtn = $('race-record-btn'),
+  raceRecordTag = $('race-record-tag'),
   chartCanvas = $('wpm-chart'),
   keyboardEl = $('keyboard-layout'),
   challengeBanner = $('challenge-banner'),
@@ -590,6 +592,7 @@ function finishTest() {
       localStorage.setItem('keyrush-best-wpm', bestWPM);
       localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
     }
+    updateRaceRecordBadge();
   }
 
   const worstKeys = Object.entries(keyMistakes)
@@ -776,11 +779,80 @@ if (ghostBtn) {
   });
 }
 
+function updateRaceRecordBadge() {
+  if (raceRecordTag) {
+    if (bestWPM > 0) {
+      raceRecordTag.textContent = `${bestWPM} WPM`;
+    } else {
+      raceRecordTag.textContent = 'RECORD TIME';
+    }
+  }
+  if (raceRecordBtn) {
+    raceRecordBtn.title = bestWPM > 0
+      ? `Race against yourself (Record: ${bestWPM} WPM)`
+      : 'Race against yourself or your record time';
+  }
+}
+
+async function raceAgainstRecord() {
+  if (activeChallenge && activeChallenge.isSoloGhost && activeChallenge.challenger && activeChallenge.challenger.includes('Personal Best')) {
+    exitChallenge();
+    return;
+  }
+
+  let recordWpm = bestWPM;
+  if ((!recordWpm || recordWpm === 0) && typeof VaultDatabase !== 'undefined') {
+    try {
+      const stats = await VaultDatabase.getStats();
+      if (stats && stats.bestWPM > 0) {
+        recordWpm = stats.bestWPM;
+        bestWPM = recordWpm;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('keyrush-best-wpm', recordWpm);
+        }
+        if (bestEl) bestEl.textContent = recordWpm;
+        updateRaceRecordBadge();
+      }
+    } catch (err) {
+      // Graceful fallback
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll('.ghost-chip[data-wpm]').forEach((c) => c.classList.remove('active'));
+  }
+
+  if (recordWpm > 0) {
+    if (typeof document !== 'undefined') {
+      const pbChip = document.querySelector('.ghost-chip[data-wpm="pb"]');
+      if (pbChip) pbChip.classList.add('active');
+    }
+    activateSoloGhostMode(recordWpm, `Personal Best (${recordWpm} WPM)`);
+    if (raceRecordBtn) raceRecordBtn.classList.add('active');
+    showVaultToast(`⚡ Ghost pacer locked to your record: ${recordWpm} WPM!`);
+  } else {
+    if (typeof document !== 'undefined') {
+      const pacerChip = document.querySelector('.ghost-chip[data-wpm="50"]');
+      if (pacerChip) pacerChip.classList.add('active');
+    }
+    activateSoloGhostMode(50, 'Pacer (50 WPM)');
+    if (raceRecordBtn) raceRecordBtn.classList.add('active');
+    showVaultToast('No record time set yet! Pacing against 50 WPM benchmark.');
+  }
+}
+
+if (raceRecordBtn) {
+  raceRecordBtn.addEventListener('click', () => {
+    raceAgainstRecord();
+  });
+}
+
 if (isBrowser) {
   initKeyboard();
   initGraph();
   loadPassage();
   updateStats();
+  updateRaceRecordBadge();
 }
 
 // Decorative WASD interaction: hover and press feedback, separate from typing-test state.
@@ -2504,6 +2576,13 @@ function activateSoloGhostMode(customWpm = null, customLabel = null) {
   if (ghostBtn) {
     ghostBtn.classList.add('active');
   }
+  if (raceRecordBtn) {
+    if (label && (label.includes('Personal Best') || label.includes('Record'))) {
+      raceRecordBtn.classList.add('active');
+    } else {
+      raceRecordBtn.classList.remove('active');
+    }
+  }
   renderPassage();
 }
 
@@ -2550,6 +2629,7 @@ function exitChallenge() {
   ghostCharIndex = -1;
   if (challengeBanner) challengeBanner.classList.add('hidden');
   if (ghostBtn) ghostBtn.classList.remove('active');
+  if (raceRecordBtn) raceRecordBtn.classList.remove('active');
   if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
     window.history.replaceState(null, '', window.location.pathname);
   }
@@ -2631,6 +2711,10 @@ if (typeof module !== 'undefined' && module.exports) {
     ChallengeProtocol,
     initChallengeFromHash,
     activateSoloGhostMode,
+    raceAgainstRecord,
+    updateRaceRecordBadge,
+    getBestWPM: () => bestWPM,
+    setBestWPM: (v) => { bestWPM = v; },
     exitChallenge,
     startGhostPacer,
     stopGhostPacer,
