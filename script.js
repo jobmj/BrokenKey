@@ -2224,11 +2224,25 @@ async function refreshVaultUI() {
         <td>${s.accuracy}%</td>
         <td>${s.consistency || 100}%</td>
         <td>${s.mistakes}${cleanBadge}</td>
-        <td><button class="vault-row-del-btn" data-id="${s.id}" type="button" title="Delete record">✕</button></td>
+        <td>
+          <button class="vault-row-race-btn" data-id="${s.id}" type="button" title="Race against this run">◉ Race</button>
+          <button class="vault-row-del-btn" data-id="${s.id}" type="button" title="Delete record">✕</button>
+        </td>
       </tr>
     `;
   });
   vaultTableBody.innerHTML = rowsHtml;
+
+  vaultTableBody.querySelectorAll('.vault-row-race-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const id = Number(e.currentTarget.dataset.id);
+      const targetSession = sessions.find((s) => s.id === id);
+      if (targetSession) {
+        closeVaultModal();
+        activateSoloGhostMode(targetSession.wpm, `Vault Run #${targetSession.id} (${targetSession.wpm} WPM)`);
+      }
+    });
+  });
 
   vaultTableBody.querySelectorAll('.vault-row-del-btn').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
@@ -2417,6 +2431,8 @@ function initChallengeFromHash() {
   if (challengeBanner) {
     challengeBanner.classList.remove('hidden');
   }
+  const bannerTitle = $('challenge-banner-title');
+  if (bannerTitle) bannerTitle.textContent = 'PEER CHALLENGE:';
   if (challengeTargetText) {
     challengeTargetText.textContent = `Beat ${decoded.wpm} WPM (${decoded.accuracy}% Acc, ${decoded.consistency}% Con)`;
   }
@@ -2432,8 +2448,27 @@ function initChallengeFromHash() {
   updateStats();
 }
 
-function activateSoloGhostMode() {
-  const targetWpm = bestWPM > 0 ? bestWPM : 50;
+function activateSoloGhostMode(customWpm = null, customLabel = null) {
+  let targetWpm = 50;
+  let label = '';
+
+  if (customWpm !== null) {
+    targetWpm = Math.max(10, Math.round(Number(customWpm) || 50));
+    label = customLabel || `Pacer (${targetWpm} WPM)`;
+  } else {
+    const activeChip = isBrowser && typeof document !== 'undefined'
+      ? document.querySelector('.ghost-chip.active')
+      : null;
+    const chipVal = activeChip ? activeChip.dataset.wpm : '50';
+    if (chipVal === 'pb') {
+      targetWpm = bestWPM > 0 ? bestWPM : 50;
+      label = bestWPM > 0 ? `Personal Best (${targetWpm} WPM)` : `Pacer (50 WPM)`;
+    } else {
+      targetWpm = Number(chipVal) || 50;
+      label = activeChip ? activeChip.textContent.trim() : `${targetWpm} WPM`;
+    }
+  }
+
   const targetAcc = (typeof localStorage !== 'undefined' && Number(localStorage.getItem('keyrush-best-accuracy'))) || 98;
   const msPerChar = 12000 / targetWpm;
   const events = [];
@@ -2446,7 +2481,7 @@ function activateSoloGhostMode() {
   activeChallenge = {
     v: 1,
     isSoloGhost: true,
-    challenger: bestWPM > 0 ? 'Personal Best' : 'Ghost Bot',
+    challenger: label,
     wpm: targetWpm,
     accuracy: targetAcc,
     consistency: 90,
@@ -2458,9 +2493,10 @@ function activateSoloGhostMode() {
   if (challengeBanner) {
     challengeBanner.classList.remove('hidden');
   }
+  const bannerTitle = $('challenge-banner-title');
+  if (bannerTitle) bannerTitle.textContent = 'GHOST RACE:';
   if (challengeTargetText) {
-    const opp = bestWPM > 0 ? `Personal Best (${targetWpm} WPM)` : `Ghost Pace (${targetWpm} WPM)`;
-    challengeTargetText.textContent = `Beat ${opp}`;
+    challengeTargetText.textContent = `Beat ${label}`;
   }
   if (ghostStatusTag) {
     ghostStatusTag.textContent = 'Ghost: Ready';
@@ -2469,6 +2505,43 @@ function activateSoloGhostMode() {
     ghostBtn.classList.add('active');
   }
   renderPassage();
+}
+
+// Ghost Opponents Selector & Paste Challenge Listeners
+if (isBrowser && typeof document !== 'undefined') {
+  document.querySelectorAll('.ghost-chip[data-wpm]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.ghost-chip[data-wpm]').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      const wpmVal = chip.dataset.wpm;
+      if (wpmVal === 'pb') {
+        const pbWpm = bestWPM > 0 ? bestWPM : 50;
+        activateSoloGhostMode(pbWpm, bestWPM > 0 ? `Personal Best (${pbWpm} WPM)` : `Pacer (50 WPM)`);
+      } else {
+        const numWpm = Number(wpmVal) || 50;
+        activateSoloGhostMode(numWpm, chip.textContent.trim());
+      }
+    });
+  });
+
+  const pasteChallengeBtn = $('paste-challenge-btn');
+  if (pasteChallengeBtn) {
+    pasteChallengeBtn.addEventListener('click', () => {
+      const input = prompt('Paste challenge link or #challenge= code from a friend:');
+      if (!input) return;
+      let hash = input.trim();
+      const hashIdx = hash.indexOf('#challenge=');
+      if (hashIdx !== -1) {
+        hash = hash.slice(hashIdx);
+      } else if (!hash.startsWith('#challenge=')) {
+        hash = '#challenge=' + hash;
+      }
+      if (typeof window !== 'undefined') {
+        window.location.hash = hash;
+        initChallengeFromHash();
+      }
+    });
+  }
 }
 
 function exitChallenge() {

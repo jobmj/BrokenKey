@@ -466,4 +466,29 @@ describe('Production Peer Challenge Protocol & Ghost Cursor Pacer', () => {
     prod.exitChallenge();
     assert.equal(prod.getActiveChallenge(), null, 'exitChallenge must clear activeChallenge');
   });
+
+  test('Ghost Opponent Selection: supports benchmark speeds (30, 75, 100 WPM) and Vault historical sessions', () => {
+    prod.resetTest();
+    prod.setTestPassage('The quick brown fox jumps over the lazy dog.');
+
+    // 1. Rookie benchmark (30 WPM)
+    prod.activateSoloGhostMode(30, '30 WPM Rookie');
+    let active = prod.getActiveChallenge();
+    assert.equal(active.wpm, 30);
+    assert.equal(active.challenger, '30 WPM Rookie');
+
+    // 2. Ace benchmark (100 WPM)
+    prod.activateSoloGhostMode(100, '100 WPM Ace');
+    active = prod.getActiveChallenge();
+    assert.equal(active.wpm, 100);
+    assert.equal(active.challenger, '100 WPM Ace');
+
+    // 3. Vault Historical Run (e.g. past record of 64 WPM)
+    prod.activateSoloGhostMode(64, 'Vault Run #4 (64 WPM)');
+    active = prod.getActiveChallenge();
+    assert.equal(active.wpm, 64);
+    assert.equal(active.challenger, 'Vault Run #4 (64 WPM)');
+
+    prod.exitChallenge();
+  });
 });

@@ -2036,9 +2036,8 @@ body.light-mode .profile-card {
 /* Peer Challenge Banner */
 .challenge-banner {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   background: #101216;
   border: 1px solid #b99aff;
   border-left: 4px solid #b99aff;
@@ -2049,6 +2048,68 @@ body.light-mode .profile-card {
 }
 .challenge-banner.hidden {
   display: none !important;
+}
+
+.challenge-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ghost-opponents-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(185, 154, 255, 0.25);
+}
+
+.ghost-pacer-label {
+  font: 800 0.62rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-transform: uppercase;
+  color: #b99aff;
+  letter-spacing: 0.08em;
+}
+
+.ghost-chip-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ghost-chip {
+  background: rgba(185, 154, 255, 0.1);
+  border: 1px solid rgba(185, 154, 255, 0.35);
+  color: #d0b9ff;
+  font: 700 0.65rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transition: all 0.12s ease;
+}
+
+.ghost-chip:hover {
+  background: rgba(185, 154, 255, 0.22);
+  border-color: #b99aff;
+  color: #ffffff;
+  transform: translate(-1px, -1px);
+}
+
+.ghost-chip.active {
+  background: #b99aff;
+  border-color: #b99aff;
+  color: #08090a;
+  font-weight: 900;
+  box-shadow: 2px 2px 0 #5c4488;
+}
+
+.ghost-chip-paste {
+  border-style: dashed;
+  background: transparent;
 }
 
 @keyframes challengePulse {
@@ -2264,6 +2325,24 @@ body.light-mode .profile-card {
   font-weight: 800;
   border: 1px solid var(--border);
   color: var(--muted);
+}
+
+.vault-row-race-btn {
+  background: transparent;
+  border: 1px solid #b99aff;
+  color: #b99aff;
+  font: 700 0.65rem ui-monospace, monospace;
+  padding: 3px 8px;
+  margin-right: 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.12s ease;
+}
+
+.vault-row-race-btn:hover {
+  background: #b99aff;
+  color: #08090a;
+  box-shadow: 2px 2px 0 #d0b9ff;
 }
 
 .vault-row-del-btn {

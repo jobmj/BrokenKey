@@ -70,14 +70,27 @@
         </div>
       </div>
       <div id="challenge-banner" class="challenge-banner hidden" role="region" aria-label="Peer challenge active">
-        <div class="challenge-info">
-          <span class="live-dot"></span>
-          <span class="challenge-title">PEER CHALLENGE:</span>
-          <span id="challenge-target-text" class="challenge-target">Beat 75 WPM (98% Acc)</span>
+        <div class="challenge-header-row">
+          <div class="challenge-info">
+            <span class="live-dot"></span>
+            <span id="challenge-banner-title" class="challenge-title">GHOST RACE:</span>
+            <span id="challenge-target-text" class="challenge-target">Beat 50 WPM (Pacer)</span>
+          </div>
+          <div class="challenge-status-group">
+            <span id="ghost-status-tag" class="ghost-status-tag">Ghost: Ready</span>
+            <button id="exit-challenge-btn" class="icon-btn tiny-btn" type="button" title="Exit ghost race">✕ Exit</button>
+          </div>
         </div>
-        <div class="challenge-status-group">
-          <span id="ghost-status-tag" class="ghost-status-tag">Ghost: Ready</span>
-          <button id="exit-challenge-btn" class="icon-btn tiny-btn" type="button" title="Exit challenge mode">✕ Exit</button>
+        <div id="ghost-opponents-row" class="ghost-opponents-row">
+          <span class="ghost-pacer-label">Opponent:</span>
+          <div class="ghost-chip-group" role="radiogroup" aria-label="Ghost opponent difficulty">
+            <button type="button" class="ghost-chip" data-wpm="30" title="30 WPM Rookie">30 WPM Rookie</button>
+            <button type="button" class="ghost-chip active" data-wpm="50" title="50 WPM Pacer">50 WPM Pacer</button>
+            <button type="button" class="ghost-chip" data-wpm="75" title="75 WPM Pro">75 WPM Pro</button>
+            <button type="button" class="ghost-chip" data-wpm="100" title="100 WPM Ace">100 WPM Ace</button>
+            <button type="button" class="ghost-chip" data-wpm="pb" title="Your Personal Best">Personal Best</button>
+            <button type="button" id="paste-challenge-btn" class="ghost-chip ghost-chip-paste" title="Load a challenge link">📥 Paste Link</button>
+          </div>
         </div>
       </div>
       <div id="passage" class="passage" aria-label="Text to type"></div>
