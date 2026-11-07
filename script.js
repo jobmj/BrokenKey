@@ -771,10 +771,8 @@ if (themeBtn) {
 
 if (ghostBtn) {
   ghostBtn.addEventListener('click', () => {
-    if (activeChallenge && activeChallenge.isSoloGhost) {
-      exitChallenge();
-    } else {
-      activateSoloGhostMode();
+    if (typeof window !== 'undefined') {
+      window.location.href = 'ghost.html';
     }
   });
 }
@@ -2573,9 +2571,6 @@ function activateSoloGhostMode(customWpm = null, customLabel = null) {
   if (ghostStatusTag) {
     ghostStatusTag.textContent = 'Ghost: Ready';
   }
-  if (ghostBtn) {
-    ghostBtn.classList.add('active');
-  }
   if (raceRecordBtn) {
     if (label && (label.includes('Personal Best') || label.includes('Record'))) {
       raceRecordBtn.classList.add('active');
@@ -2628,7 +2623,6 @@ function exitChallenge() {
   stopGhostPacer();
   ghostCharIndex = -1;
   if (challengeBanner) challengeBanner.classList.add('hidden');
-  if (ghostBtn) ghostBtn.classList.remove('active');
   if (raceRecordBtn) raceRecordBtn.classList.remove('active');
   if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
     window.history.replaceState(null, '', window.location.pathname);
