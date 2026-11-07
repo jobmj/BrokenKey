@@ -2033,18 +2033,56 @@ body.light-mode .profile-card {
   font-weight: 900;
 }
 
+/* Subtitle Terminal Strip */
+.subtitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font: 800 0.78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 14px 0 18px;
+  padding: 8px 14px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  box-shadow: 3px 3px 0 #252a1f;
+  max-width: 100%;
+}
+
+.subtitle-lead {
+  color: var(--accent);
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .subtitle-tag {
   display: inline-block;
-  margin-left: 10px;
   padding: 3px 8px;
   background: rgba(185, 154, 255, 0.14);
   border: 1px solid #b99aff;
   color: #d0b9ff;
-  font: 800 0.64rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 800 0.62rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   vertical-align: middle;
-  transform: translateY(-1px);
+}
+
+body.light-mode .subtitle {
+  background: #e7eadf;
+  border-color: #bfc6b5;
+  border-left-color: var(--accent);
+  color: #2c352e;
+  box-shadow: 3px 3px 0 #bfc6b5;
+}
+
+body.light-mode .subtitle-lead {
+  color: var(--accent);
 }
 
 body.light-mode .subtitle-tag {
