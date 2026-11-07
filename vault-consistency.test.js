@@ -170,6 +170,37 @@ describe('Production VaultDatabase Storage Engine (IndexedDB & Fallback)', () =>
     const stats = await db.getStats();
     assert.equal(stats.totalRuns, 0);
   });
+
+  test('Accidental Deletion & Undo Recovery: deleted session can be re-persisted to restore exact state', async () => {
+    const db = new VaultDatabase();
+    await db.init();
+
+    const id = await db.saveSession({
+      wpm: 88,
+      accuracy: 99,
+      consistency: 94,
+      mistakes: 1,
+      totalTyped: 140,
+      mode: '30s'
+    });
+
+    const sessionsBefore = await db.getAllSessions();
+    const sessionToDelete = sessionsBefore.find((s) => s.id === id);
+    assert.ok(sessionToDelete);
+
+    // Accidental deletion
+    await db.deleteSession(id);
+    assert.equal((await db.getAllSessions()).length, 0);
+
+    // Undo action restores the deleted session
+    const restoredId = await db.saveSession(sessionToDelete);
+    assert.ok(restoredId > 0);
+
+    const sessionsAfter = await db.getAllSessions();
+    assert.equal(sessionsAfter.length, 1);
+    assert.equal(sessionsAfter[0].wpm, 88);
+    assert.equal(sessionsAfter[0].accuracy, 99);
+  });
 });
 
 describe('Production JSON Portability (Export & Schema Validation)', () => {

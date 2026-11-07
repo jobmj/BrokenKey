@@ -2232,21 +2232,60 @@ async function refreshVaultUI() {
 
   vaultTableBody.querySelectorAll('.vault-row-del-btn').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
-      const id = e.currentTarget.dataset.id;
+      const id = Number(e.currentTarget.dataset.id);
+      const targetSession = sessions.find((s) => s.id === id);
+      if (targetSession) {
+        lastDeletedItems = [targetSession];
+      }
       await vaultDB.deleteSession(id);
-      showVaultToast('Session deleted.');
+      showVaultToast('Session deleted.', 5000, async () => {
+        if (lastDeletedItems && lastDeletedItems.length > 0) {
+          for (const item of lastDeletedItems) {
+            await vaultDB.saveSession(item);
+          }
+          lastDeletedItems = [];
+          showVaultToast('✔ Session restored!');
+          refreshVaultUI();
+        }
+      });
       refreshVaultUI();
     });
   });
 }
 
-function showVaultToast(msg, duration = 3000) {
+let lastDeletedItems = [];
+
+function showVaultToast(msg, duration = 3000, undoCallback = null) {
   if (!vaultToast) return;
-  vaultToast.textContent = msg;
+  vaultToast.innerHTML = '';
+
+  if (typeof document !== 'undefined') {
+    const textSpan = document.createElement('span');
+    textSpan.textContent = msg;
+    vaultToast.appendChild(textSpan);
+
+    if (undoCallback) {
+      const undoBtn = document.createElement('button');
+      undoBtn.id = 'vault-undo-btn';
+      undoBtn.className = 'vault-undo-btn';
+      undoBtn.type = 'button';
+      undoBtn.textContent = '↩ Undo';
+      undoBtn.addEventListener('click', () => {
+        clearTimeout(vaultToast._timeout);
+        vaultToast.classList.add('hidden');
+        undoCallback();
+      });
+      vaultToast.appendChild(undoBtn);
+    }
+  } else {
+    vaultToast.textContent = msg;
+  }
+
   vaultToast.classList.remove('hidden');
   clearTimeout(vaultToast._timeout);
   vaultToast._timeout = setTimeout(() => {
     vaultToast.classList.add('hidden');
+    lastDeletedItems = [];
   }, duration);
 }
 
@@ -2300,12 +2339,27 @@ if (vaultImportFile) {
 
 if (vaultClearBtn) {
   vaultClearBtn.addEventListener('click', async () => {
+    const allSessions = await vaultDB.getAllSessions();
+    if (allSessions.length === 0) {
+      showVaultToast('Vault is empty. Nothing to clear.');
+      return;
+    }
     const confirmed = typeof window !== 'undefined' && window.confirm
-      ? window.confirm('Are you sure you want to clear all Vault sessions? This cannot be undone.')
+      ? window.confirm('Are you sure you want to clear all Vault sessions? You can immediately undo this action.')
       : true;
     if (confirmed) {
+      lastDeletedItems = [...allSessions];
       await vaultDB.clearAllSessions();
-      showVaultToast('Vault cleared.');
+      showVaultToast('Vault cleared.', 6000, async () => {
+        if (lastDeletedItems && lastDeletedItems.length > 0) {
+          for (const item of lastDeletedItems) {
+            await vaultDB.saveSession(item);
+          }
+          lastDeletedItems = [];
+          showVaultToast('✔ All sessions restored!');
+          refreshVaultUI();
+        }
+      });
       refreshVaultUI();
     }
   });

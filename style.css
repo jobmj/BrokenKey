@@ -2180,6 +2180,10 @@ body.light-mode .profile-card {
 }
 
 .vault-toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   padding: 10px 14px;
   margin-bottom: 14px;
   font: 700 0.75rem ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -2187,6 +2191,25 @@ body.light-mode .profile-card {
   background: rgba(214, 255, 53, 0.08);
   color: var(--accent);
   text-transform: uppercase;
+}
+.vault-toast.hidden {
+  display: none !important;
+}
+
+.vault-undo-btn {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  font: 900 0.72rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.vault-undo-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--text);
 }
 
 .vault-table-container {
