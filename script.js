@@ -314,6 +314,9 @@ function loadPassage() {
     inputEl.value = '';
     inputEl.maxLength = currentPassage.length;
   }
+  if (typeof activateSoloGhostMode === 'function' && activeChallenge && activeChallenge.isSoloGhost) {
+    activateSoloGhostMode();
+  }
   renderPassage();
 }
 
@@ -618,9 +621,17 @@ function finishTest() {
 
   if (activeChallenge) {
     const won = finalWPM >= activeChallenge.wpm;
-    const challengeOutcome = won
-      ? ` · 🏆 CHALLENGE WON (${finalWPM} vs ${activeChallenge.wpm} WPM)`
-      : ` · 💀 CHALLENGE LOST (${activeChallenge.wpm} vs ${finalWPM} WPM)`;
+    let challengeOutcome = '';
+    if (activeChallenge.isSoloGhost) {
+      const oppLabel = bestWPM > 0 ? 'PERSONAL BEST' : 'GHOST BOT';
+      challengeOutcome = won
+        ? ` · 🏆 ${oppLabel} DEFEATED (${finalWPM} vs ${activeChallenge.wpm} WPM)`
+        : ` · 💀 ${oppLabel} WON (${activeChallenge.wpm} vs ${finalWPM} WPM)`;
+    } else {
+      challengeOutcome = won
+        ? ` · 🏆 CHALLENGE WON (${finalWPM} vs ${activeChallenge.wpm} WPM)`
+        : ` · 💀 CHALLENGE LOST (${activeChallenge.wpm} vs ${finalWPM} WPM)`;
+    }
     lastResultSummary += challengeOutcome;
   }
 
@@ -757,8 +768,10 @@ if (themeBtn) {
 
 if (ghostBtn) {
   ghostBtn.addEventListener('click', () => {
-    if (typeof window !== 'undefined' && window.location) {
-      window.location.href = 'ghost.html';
+    if (activeChallenge && activeChallenge.isSoloGhost) {
+      exitChallenge();
+    } else {
+      activateSoloGhostMode();
     }
   });
 }
@@ -2365,11 +2378,51 @@ function initChallengeFromHash() {
   updateStats();
 }
 
+function activateSoloGhostMode() {
+  const targetWpm = bestWPM > 0 ? bestWPM : 50;
+  const targetAcc = (typeof localStorage !== 'undefined' && Number(localStorage.getItem('keyrush-best-accuracy'))) || 98;
+  const msPerChar = 12000 / targetWpm;
+  const events = [];
+  events.push([0, 0]);
+  const passageLen = (currentPassage || '').length;
+  for (let i = 1; i <= passageLen; i++) {
+    events.push([Math.round(i * msPerChar), i]);
+  }
+
+  activeChallenge = {
+    v: 1,
+    isSoloGhost: true,
+    challenger: bestWPM > 0 ? 'Personal Best' : 'Ghost Bot',
+    wpm: targetWpm,
+    accuracy: targetAcc,
+    consistency: 90,
+    timeLimit: timeLimit,
+    passage: currentPassage,
+    events: events
+  };
+
+  if (challengeBanner) {
+    challengeBanner.classList.remove('hidden');
+  }
+  if (challengeTargetText) {
+    const opp = bestWPM > 0 ? `Personal Best (${targetWpm} WPM)` : `Ghost Pace (${targetWpm} WPM)`;
+    challengeTargetText.textContent = `Beat ${opp}`;
+  }
+  if (ghostStatusTag) {
+    ghostStatusTag.textContent = 'Ghost: Ready';
+  }
+  if (ghostBtn) {
+    ghostBtn.classList.add('active');
+  }
+  renderPassage();
+}
+
 function exitChallenge() {
   activeChallenge = null;
   stopGhostPacer();
   ghostCharIndex = -1;
   if (challengeBanner) challengeBanner.classList.add('hidden');
+  if (ghostBtn) ghostBtn.classList.remove('active');
   if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
     window.history.replaceState(null, '', window.location.pathname);
   }
@@ -2450,6 +2503,7 @@ if (typeof module !== 'undefined' && module.exports) {
     vaultDB,
     ChallengeProtocol,
     initChallengeFromHash,
+    activateSoloGhostMode,
     exitChallenge,
     startGhostPacer,
     stopGhostPacer,

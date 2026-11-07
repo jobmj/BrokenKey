@@ -404,4 +404,35 @@ describe('Production Peer Challenge Protocol & Ghost Cursor Pacer', () => {
     prod.setActiveChallenge(null);
     prod.resetTest();
   });
+
+  test('Solo Ghost Mode: activates in-passage ghost racing against Personal Best / target pace', () => {
+    prod.resetTest();
+    prod.setTestPassage('Practice makes progress. Keep typing!');
+    prod.activateSoloGhostMode();
+
+    const active = prod.getActiveChallenge();
+    assert.ok(active !== null, 'Active challenge should be created for solo ghost');
+    assert.equal(active.isSoloGhost, true, 'isSoloGhost flag must be true');
+    assert.ok(active.wpm > 0, 'Target WPM must be positive');
+    assert.ok(active.events.length > 0, 'Synthetic ghost events must be generated');
+
+    // Ghost events must step through characters monotonically
+    for (let i = 1; i < active.events.length; i++) {
+      assert.ok(active.events[i][0] >= active.events[i - 1][0], 'Timestamps must increase');
+      assert.ok(active.events[i][1] >= active.events[i - 1][1], 'Char indexes must advance');
+    }
+
+    // Finishing run against solo ghost announces personal best / ghost outcome
+    prod.setTestTyping(true);
+    prod.setTestTotalTyped(200);
+    prod.setTestCorrectTyped(200);
+    prod.setStartTime(Date.now() - 30000); // ~80 WPM
+    prod.finishTest();
+
+    const result = prod.getLastResultSummary();
+    assert.ok(result.includes('DEFEATED'), 'Beating ghost pace must announce defeat of ghost/PB');
+
+    prod.exitChallenge();
+    assert.equal(prod.getActiveChallenge(), null, 'exitChallenge must clear activeChallenge');
+  });
 });
