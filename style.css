@@ -2001,3 +2001,282 @@ body.light-mode .profile-card {
   0% { height: 4px; }
   100% { height: 18px; }
 }
+
+/* ===== VAULT & CHALLENGE ENGINE (Vault Storage, Consistency & Peer Challenges) ===== */
+.btn-share {
+  background: transparent;
+  color: #b99aff;
+  border-color: #b99aff;
+}
+.btn-share:hover {
+  background: #b99aff;
+  color: #08090a;
+  box-shadow: 3px 3px 0 #d0b9ff;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--wrong);
+  border-color: var(--wrong);
+}
+.btn-danger:hover {
+  background: var(--wrong);
+  color: #08090a;
+  box-shadow: 3px 3px 0 #ff8fa1;
+}
+
+/* Peer Challenge Banner */
+.challenge-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #101216;
+  border: 1px solid #b99aff;
+  border-left: 4px solid #b99aff;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 3px 3px 0 #44365f;
+  animation: challengePulse 2s infinite ease-in-out alternate;
+}
+
+@keyframes challengePulse {
+  0% { border-color: #8f6ee0; }
+  100% { border-color: #d0b9ff; }
+}
+
+.challenge-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 0.74rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: #e5dbff;
+  text-transform: uppercase;
+  flex-wrap: wrap;
+}
+
+.challenge-title {
+  color: #b99aff;
+  font-weight: 900;
+}
+
+.challenge-target {
+  color: #ffffff;
+  background: rgba(185, 154, 255, 0.2);
+  padding: 2px 7px;
+  border: 1px solid #b99aff;
+  font-weight: 800;
+}
+
+.challenge-status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ghost-status-tag {
+  font: 700 0.65rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  background: rgba(185, 154, 255, 0.15);
+  border: 1px dashed #b99aff;
+  color: #d0b9ff;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.tiny-btn {
+  padding: 4px 8px;
+  font-size: 0.65rem;
+  border-color: var(--border);
+}
+
+/* In-Passage Ghost Cursor */
+.char.ghost-at {
+  position: relative;
+  text-decoration: underline;
+  text-decoration-color: #b99aff;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+  background: rgba(185, 154, 255, 0.22);
+  color: #f5f0ff;
+}
+
+.char.ghost-at::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 3px;
+  background: #b99aff;
+  box-shadow: 0 0 8px #b99aff;
+}
+
+/* Vault Modal & Analytics */
+.vault-modal-card {
+  max-width: 860px;
+  width: 100%;
+}
+
+.vault-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.vault-stat-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  padding: 14px 12px;
+  text-align: left;
+}
+
+.vault-stat-label {
+  display: block;
+  font: 700 0.62rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.vault-stat-val {
+  font: 900 clamp(1.2rem, 2.5vw, 1.8rem) ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--accent);
+  letter-spacing: -0.04em;
+}
+
+.vault-actions-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.vault-btn-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.vault-import-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+}
+
+.vault-toast {
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font: 700 0.75rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  border: 1px solid var(--accent);
+  background: rgba(214, 255, 53, 0.08);
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.vault-table-container {
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+}
+
+.vault-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 0.78rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: left;
+}
+
+.vault-table th,
+.vault-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.vault-table th {
+  background: var(--panel);
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.vault-table tr:hover td {
+  background: rgba(214, 255, 53, 0.03);
+}
+
+.vault-table .vault-empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 14px;
+  font-style: italic;
+  white-space: normal;
+}
+
+.vault-mode-badge {
+  display: inline-block;
+  padding: 2px 5px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.vault-row-del-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--wrong);
+  font: 700 0.68rem ui-monospace, monospace;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.vault-row-del-btn:hover {
+  background: var(--wrong);
+  color: #08090a;
+  border-color: var(--wrong);
+}
+
+body.light-mode .challenge-banner {
+  background: #f3effc;
+  border-color: #8f6ee0;
+  box-shadow: 3px 3px 0 #8f6ee0;
+}
+body.light-mode .challenge-info {
+  color: #3b2866;
+}
+body.light-mode .challenge-target {
+  background: #e5dbff;
+  color: #2b1d4d;
+}
+body.light-mode .vault-stat-card {
+  background: #e7eadf;
+}
+body.light-mode .vault-table th {
+  background: #dce1d2;
+}
+
+@media (max-width: 680px) {
+  .vault-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .challenge-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .challenge-status-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

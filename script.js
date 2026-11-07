@@ -22,11 +22,29 @@ const passageEl = $('passage'),
   resetBtn = $('reset-btn'),
   nextBtn = $('next-btn'),
   replayBtn = $('replay-btn'),
+  shareChallengeBtn = $('share-challenge-btn'),
   statusEl = $('status-label'),
   themeBtn = $('theme-btn'),
   ghostBtn = $('ghost-btn'),
   chartCanvas = $('wpm-chart'),
-  keyboardEl = $('keyboard-layout');
+  keyboardEl = $('keyboard-layout'),
+  challengeBanner = $('challenge-banner'),
+  challengeTargetText = $('challenge-target-text'),
+  ghostStatusTag = $('ghost-status-tag'),
+  exitChallengeBtn = $('exit-challenge-btn'),
+  vaultBtn = $('vault-btn'),
+  vaultModal = $('vault-modal'),
+  closeVaultBtn = $('close-vault-btn'),
+  vaultExportBtn = $('vault-export-btn'),
+  vaultImportFile = $('vault-import-file'),
+  vaultClearBtn = $('vault-clear-btn'),
+  vaultToast = $('vault-toast'),
+  vaultTableBody = $('vault-table-body'),
+  vaultTotalRunsEl = $('vault-total-runs'),
+  vaultBestWpmEl = $('vault-best-wpm'),
+  vaultAvgWpmEl = $('vault-avg-wpm'),
+  vaultAvgConsistencyEl = $('vault-avg-consistency'),
+  vaultEngineBadge = $('vault-engine-badge');
 
 const timeBtns = isBrowser ? document.querySelectorAll('.time-btn') : [];
 let currentPassage = '',
@@ -44,6 +62,13 @@ let currentPassage = '',
 let finishTimeout = null;
 
 let lastResultSummary = '';
+
+// Vault, Consistency & Challenge State
+let keystrokeTimestamps = [];
+let lastConsistencyScore = 100;
+let activeChallenge = null;
+let ghostCharIndex = -1;
+let ghostRafId = null;
 
 let bestWPM = (typeof localStorage !== 'undefined' && Number(localStorage.getItem('keyrush-best-wpm'))) || 0;
 if (bestEl) bestEl.textContent = bestWPM;
@@ -293,12 +318,14 @@ function loadPassage() {
 }
 
 function renderPassage() {
+  if (!passageEl) return;
   let html = '';
   for (let i = 0; i < currentPassage.length; i++) {
     let cls = 'char';
     if (charStates[i] === 'correct') cls += ' correct';
     if (charStates[i] === 'wrong') cls += ' wrong';
     if (i === charIndex && isTyping) cls += ' current';
+    if (activeChallenge && isTyping && i === ghostCharIndex) cls += ' ghost-at';
     html += `<span class="${cls}">${escapeHTML(currentPassage[i])}</span>`;
   }
   passageEl.innerHTML = html;
@@ -418,14 +445,17 @@ function handleInput(event) {
   renderPassage();
   updateStats();
 
-  if (isTyping && startTime && typeof sessionReplayEvents !== 'undefined') {
-    sessionReplayEvents.push({
-      t: Date.now() - startTime,
-      val: typed,
-      cursor: (inputEl && inputEl.selectionStart !== undefined) ? inputEl.selectionStart : typed.length,
-      wpm: calculateWPM(),
-      errors: mistakes
-    });
+  if (isTyping && startTime) {
+    keystrokeTimestamps.push(Date.now());
+    if (typeof sessionReplayEvents !== 'undefined') {
+      sessionReplayEvents.push({
+        t: Date.now() - startTime,
+        val: typed,
+        cursor: (inputEl && inputEl.selectionStart !== undefined) ? inputEl.selectionStart : typed.length,
+        wpm: calculateWPM(),
+        errors: mistakes
+      });
+    }
   }
 
   const isPassageComplete = charIndex === currentPassage.length && charStates[currentPassage.length - 1] === 'correct';
@@ -487,9 +517,13 @@ function startTimer() {
   clearInterval(timer);
   isTyping = true;
   startTime = Date.now();
+  keystrokeTimestamps = [startTime];
+  ghostCharIndex = -1;
+  if (activeChallenge) startGhostPacer();
   timeLeft = timeLimit === 0 ? 0 : timeLimit;
   sessionReplayEvents = [{ t: 0, val: '', cursor: 0, wpm: 0, errors: 0 }];
   if (replayBtn) replayBtn.classList.add('hidden');
+  if (shareChallengeBtn) shareChallengeBtn.classList.add('hidden');
   if (stopBtn) stopBtn.classList.remove('hidden');
   statusEl.textContent = timeLimit === 0 ? 'FREE RUN (UNTIMED)' : 'TEST IN PROGRESS';
   wpmHistory = [{ time: 0, wpm: 0 }];
@@ -521,6 +555,7 @@ function finishTest() {
   if (timer) clearInterval(timer);
   clearTimeout(finishTimeout);
   finishTimeout = null;
+  stopGhostPacer();
 
   timer = null;
   isTyping = false;
@@ -530,7 +565,7 @@ function finishTest() {
   if (replayBtn) replayBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 
-  statusEl.textContent = 'TEST COMPLETE';
+  if (statusEl) statusEl.textContent = 'TEST COMPLETE';
 
   renderPassage();
   updateHeatmap();
@@ -539,11 +574,19 @@ function finishTest() {
   const finalWPM = calculateWPM();
   const finalAccuracy = calculateAccuracy();
 
+  // Keystroke flight-time consistency calculation
+  const intervals = [];
+  for (let i = 1; i < keystrokeTimestamps.length; i++) {
+    intervals.push(keystrokeTimestamps[i] - keystrokeTimestamps[i - 1]);
+  }
+  lastConsistencyScore = calculateConsistency(intervals);
+
   if (finalWPM > bestWPM) {
     bestWPM = finalWPM;
-
-    localStorage.setItem('keyrush-best-wpm', bestWPM);
-    localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('keyrush-best-wpm', bestWPM);
+      localStorage.setItem('keyrush-best-accuracy', finalAccuracy);
+    }
   }
 
   const worstKeys = Object.entries(keyMistakes)
@@ -564,12 +607,21 @@ function finishTest() {
   const elapsedSecStr = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : timeLeft;
   const errorLabel = mistakes === 1 ? 'error' : 'errors';
   const cleanTag = mistakes === 0 ? ' (Clean run)' : '';
+  const consistencyStr = ` · ${lastConsistencyScore}% consistency`;
   if (timeLimit === 0) {
     lastResultSummary =
-      `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
+      `Completed in ${elapsedSecStr}s · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${consistencyStr}${breakdownStr}`;
   } else {
     lastResultSummary =
-      `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${breakdownStr}`;
+      `Test complete · ${finalWPM} WPM · ${mistakes} ${errorLabel}${cleanTag}${consistencyStr}${breakdownStr}`;
+  }
+
+  if (activeChallenge) {
+    const won = finalWPM >= activeChallenge.wpm;
+    const challengeOutcome = won
+      ? ` · 🏆 CHALLENGE WON (${finalWPM} vs ${activeChallenge.wpm} WPM)`
+      : ` · 💀 CHALLENGE LOST (${activeChallenge.wpm} vs ${finalWPM} WPM)`;
+    lastResultSummary += challengeOutcome;
   }
 
   if (resultEl) {
@@ -590,19 +642,44 @@ function finishTest() {
   if (replayBtn && sessionReplayEvents.length > 1) {
     replayBtn.classList.remove('hidden');
   }
+
+  if (shareChallengeBtn && sessionReplayEvents.length > 1) {
+    shareChallengeBtn.classList.remove('hidden');
+  }
+
+  // Persist session to Vault
+  const sessionRecord = {
+    timestamp: Date.now(),
+    dateString: new Date().toLocaleString(),
+    wpm: finalWPM,
+    accuracy: finalAccuracy,
+    consistency: lastConsistencyScore,
+    mistakes: mistakes,
+    totalTyped: totalTyped,
+    timeLimit: timeLimit,
+    mode: timeLimit === 0 ? 'free' : `${timeLimit}s`,
+    cleanRun: mistakes === 0,
+    passageSnippet: (currentPassage || '').slice(0, 80)
+  };
+  if (typeof vaultDB !== 'undefined' && vaultDB && typeof vaultDB.saveSession === 'function') {
+    vaultDB.saveSession(sessionRecord).catch(() => {});
+  }
 }
 
 
 function resetTest() {
   clearInterval(timer);
   clearTimeout(finishTimeout);
-finishTimeout = null;
-testState = 'READY';
+  finishTimeout = null;
+  testState = 'READY';
   timer = null;
   isTyping = false;
   isPasting = false;
   clearTimeout(pasteResetTimeout);
   startTime = null;
+  keystrokeTimestamps = [];
+  stopGhostPacer();
+  ghostCharIndex = -1;
   lastResultSummary = '';
   charIndex = 0;
   mistakes = 0;
@@ -624,6 +701,7 @@ testState = 'READY';
   if (startBtn) startBtn.disabled = false;
   if (stopBtn) stopBtn.classList.add('hidden');
   if (replayBtn) replayBtn.classList.add('hidden');
+  if (shareChallengeBtn) shareChallengeBtn.classList.add('hidden');
   if (typeof closeReplayModal === 'function') closeReplayModal();
 }
 
@@ -1715,11 +1793,603 @@ if (typeof window !== 'undefined') window.addEventListener('keydown', (e) => {
     if (audioSettingsModal && !audioSettingsModal.classList.contains('hidden')) {
       closeAudioSettings();
     }
+    if (vaultModal && !vaultModal.classList.contains('hidden')) {
+      closeVaultModal();
+    }
   }
 });
 
 // Initialize Audio UI state on page load
 updateAudioUI();
+
+// =============================================================
+// KEYRUSH VAULT, CONSISTENCY METRICS & PEER CHALLENGES ENGINE
+// =============================================================
+
+/**
+ * Keystroke Consistency Telemetry
+ * Calculates Inter-Keystroke Interval (IKI) flight-time variation.
+ * Uses Coefficient of Variation (CV = σ / μ) with edge-case clamping.
+ * Outliers (> 2000ms pause) are capped to 2000ms to preserve rhythm measurement.
+ */
+function calculateConsistency(intervals) {
+  if (!intervals || intervals.length < 2) return 100;
+
+  // Clamp outlier hesitation pauses (> 2000ms) to 2000ms
+  const capped = intervals.map((i) => Math.min(Math.max(0, Number(i) || 0), 2000));
+  const n = capped.length;
+  const sum = capped.reduce((a, b) => a + b, 0);
+  const mean = sum / n;
+
+  if (mean === 0) return 0; // Robotic anomaly or zero-timestamp delta
+
+  const variance = capped.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;
+  const sd = Math.sqrt(variance);
+  const cv = sd / mean;
+
+  const rawScore = Math.round((1 - cv) * 100);
+  return Math.max(0, Math.min(100, rawScore));
+}
+
+/**
+ * Asynchronous IndexedDB Storage Engine (keyrush_vault)
+ * Persistent client-side database with in-memory fallback for headless/incognito environments.
+ */
+class VaultDatabase {
+  constructor() {
+    this.dbName = 'keyrush_vault';
+    this.dbVersion = 1;
+    this.storeName = 'sessions';
+    this.db = null;
+    this.isIndexedDBAvailable = false;
+    this.memoryStore = [];
+  }
+
+  async init() {
+    if (typeof indexedDB === 'undefined') {
+      this.isIndexedDBAvailable = false;
+      return null;
+    }
+    return new Promise((resolve) => {
+      try {
+        const request = indexedDB.open(this.dbName, this.dbVersion);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            const store = db.createObjectStore(this.storeName, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            store.createIndex('wpm', 'wpm', { unique: false });
+            store.createIndex('accuracy', 'accuracy', { unique: false });
+            store.createIndex('mode', 'mode', { unique: false });
+            store.createIndex('consistency', 'consistency', { unique: false });
+          }
+        };
+        request.onsuccess = (e) => {
+          this.db = e.target.result;
+          this.isIndexedDBAvailable = true;
+          resolve(this.db);
+        };
+        request.onerror = () => {
+          this.isIndexedDBAvailable = false;
+          resolve(null);
+        };
+      } catch (err) {
+        this.isIndexedDBAvailable = false;
+        resolve(null);
+      }
+    });
+  }
+
+  async saveSession(session) {
+    const data = {
+      timestamp: Number(session.timestamp) || Date.now(),
+      dateString: session.dateString || new Date().toLocaleString(),
+      wpm: Math.round(Number(session.wpm)) || 0,
+      accuracy: Math.round(Number(session.accuracy)) || 0,
+      consistency: Math.round(Number(session.consistency)) || 100,
+      mistakes: Math.round(Number(session.mistakes)) || 0,
+      totalTyped: Math.round(Number(session.totalTyped)) || 0,
+      timeLimit: session.timeLimit !== undefined ? Number(session.timeLimit) : 30,
+      mode: session.mode || (session.timeLimit === 0 ? 'free' : `${session.timeLimit}s`),
+      cleanRun: Boolean(session.cleanRun),
+      passageSnippet: String(session.passageSnippet || '').slice(0, 80)
+    };
+
+    if (!this.isIndexedDBAvailable || !this.db) {
+      data.id = this.memoryStore.length ? Math.max(...this.memoryStore.map((s) => s.id || 0)) + 1 : 1;
+      this.memoryStore.push(data);
+      return data.id;
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction([this.storeName], 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.add(data);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (e) => reject(e.target.error);
+      } catch (err) {
+        data.id = this.memoryStore.length ? Math.max(...this.memoryStore.map((s) => s.id || 0)) + 1 : 1;
+        this.memoryStore.push(data);
+        resolve(data.id);
+      }
+    });
+  }
+
+  async getAllSessions() {
+    if (!this.isIndexedDBAvailable || !this.db) {
+      return [...this.memoryStore].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction([this.storeName], 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const req = store.getAll();
+        req.onsuccess = () => {
+          const results = req.result || [];
+          results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          resolve(results);
+        };
+        req.onerror = (e) => reject(e.target.error);
+      } catch (err) {
+        resolve([...this.memoryStore].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+      }
+    });
+  }
+
+  async deleteSession(id) {
+    const numId = Number(id);
+    if (!this.isIndexedDBAvailable || !this.db) {
+      const idx = this.memoryStore.findIndex((s) => s.id === numId);
+      if (idx !== -1) {
+        this.memoryStore.splice(idx, 1);
+        return true;
+      }
+      return false;
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction([this.storeName], 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.delete(numId);
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e.target.error);
+      } catch (err) {
+        resolve(false);
+      }
+    });
+  }
+
+  async clearAllSessions() {
+    this.memoryStore = [];
+    if (!this.isIndexedDBAvailable || !this.db) {
+      return true;
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction([this.storeName], 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.clear();
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e.target.error);
+      } catch (err) {
+        resolve(true);
+      }
+    });
+  }
+
+  async getStats() {
+    const sessions = await this.getAllSessions();
+    if (sessions.length === 0) {
+      return { totalRuns: 0, bestWPM: 0, avgWPM: 0, avgConsistency: 0, cleanRunsCount: 0 };
+    }
+    const totalRuns = sessions.length;
+    let bestWPM = 0;
+    let sumWPM = 0;
+    let sumConsistency = 0;
+    let cleanRunsCount = 0;
+
+    for (const s of sessions) {
+      if (s.wpm > bestWPM) bestWPM = s.wpm;
+      sumWPM += s.wpm;
+      sumConsistency += s.consistency !== undefined ? s.consistency : 100;
+      if (s.cleanRun) cleanRunsCount++;
+    }
+
+    return {
+      totalRuns,
+      bestWPM,
+      avgWPM: Math.round(sumWPM / totalRuns),
+      avgConsistency: Math.round(sumConsistency / totalRuns),
+      cleanRunsCount
+    };
+  }
+
+  exportData(sessions) {
+    return JSON.stringify({
+      schema: 'keyrush-vault-v1',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      count: sessions.length,
+      sessions: sessions
+    }, null, 2);
+  }
+
+  validateImport(jsonString) {
+    if (typeof jsonString !== 'string') return { valid: false, error: 'Input must be a valid JSON string' };
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (e) {
+      return { valid: false, error: 'Malformed JSON syntax' };
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      return { valid: false, error: 'JSON payload must be an object' };
+    }
+    if (parsed.schema !== 'keyrush-vault-v1' && parsed.version !== 1) {
+      return { valid: false, error: 'Unsupported Vault schema or version' };
+    }
+    if (!Array.isArray(parsed.sessions)) {
+      return { valid: false, error: 'Missing sessions array in vault backup' };
+    }
+
+    const validatedSessions = [];
+    for (let i = 0; i < parsed.sessions.length; i++) {
+      const s = parsed.sessions[i];
+      if (typeof s !== 'object' || s === null) continue;
+      const wpm = Number(s.wpm);
+      const acc = Number(s.accuracy);
+      if (isNaN(wpm) || isNaN(acc) || wpm < 0 || acc < 0) continue;
+
+      validatedSessions.push({
+        timestamp: Number(s.timestamp) || Date.now(),
+        dateString: s.dateString || new Date(Number(s.timestamp) || Date.now()).toLocaleString(),
+        wpm: Math.round(wpm),
+        accuracy: Math.round(acc),
+        consistency: Math.max(0, Math.min(100, Math.round(Number(s.consistency) || 100))),
+        mistakes: Math.max(0, Math.round(Number(s.mistakes) || 0)),
+        totalTyped: Math.max(0, Math.round(Number(s.totalTyped) || 0)),
+        timeLimit: s.timeLimit !== undefined ? Number(s.timeLimit) : 30,
+        mode: s.mode || (s.timeLimit === 0 ? 'free' : `${s.timeLimit || 30}s`),
+        cleanRun: Boolean(s.cleanRun),
+        passageSnippet: String(s.passageSnippet || '').slice(0, 80)
+      });
+    }
+
+    if (validatedSessions.length === 0) {
+      return { valid: false, error: 'No valid sessions found in import file' };
+    }
+
+    return { valid: true, sessions: validatedSessions };
+  }
+}
+
+const vaultDB = new VaultDatabase();
+
+/**
+ * Challenge Protocol & In-Passage Ghost Cursor Engine
+ * Serializes and decodes URL hash challenges (#challenge=...)
+ * Drives secondary ghost cursor pacing challenger timestamps.
+ */
+const ChallengeProtocol = {
+  encode(challenge) {
+    if (!challenge || typeof challenge !== 'object') return '';
+    const payload = {
+      v: 1,
+      wpm: Number(challenge.wpm) || 0,
+      acc: Number(challenge.accuracy) || 100,
+      con: Number(challenge.consistency) || 100,
+      mode: challenge.timeLimit !== undefined ? challenge.timeLimit : 30,
+      passage: String(challenge.passage || ''),
+      events: Array.isArray(challenge.events) ? challenge.events : []
+    };
+    const jsonStr = JSON.stringify(payload);
+    const b64 = typeof btoa === 'function'
+      ? btoa(unescape(encodeURIComponent(jsonStr)))
+      : Buffer.from(jsonStr, 'utf-8').toString('base64');
+    return `#challenge=${encodeURIComponent(b64)}`;
+  },
+
+  decode(hash) {
+    if (!hash || typeof hash !== 'string' || !hash.startsWith('#challenge=')) return null;
+    const rawB64 = decodeURIComponent(hash.slice('#challenge='.length));
+    try {
+      const jsonStr = typeof atob === 'function'
+        ? decodeURIComponent(escape(atob(rawB64)))
+        : Buffer.from(rawB64, 'base64').toString('utf-8');
+      const data = JSON.parse(jsonStr);
+      if (!data || data.v !== 1 || typeof data.wpm !== 'number' || typeof data.passage !== 'string') {
+        return null;
+      }
+      return {
+        v: 1,
+        wpm: Math.max(0, Math.round(data.wpm)),
+        accuracy: Math.max(0, Math.min(100, Math.round(data.acc || 100))),
+        consistency: Math.max(0, Math.min(100, Math.round(data.con || 100))),
+        timeLimit: Number(data.mode) >= 0 ? Number(data.mode) : 30,
+        passage: data.passage,
+        events: Array.isArray(data.events) ? data.events : []
+      };
+    } catch (err) {
+      return null;
+    }
+  },
+
+  interpolateGhostIndex(events, elapsedMs) {
+    if (!events || events.length === 0) return 0;
+    if (elapsedMs <= events[0][0]) return events[0][1];
+    if (elapsedMs >= events[events.length - 1][0]) return events[events.length - 1][1];
+
+    let low = 0;
+    let high = events.length - 1;
+    let best = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (events[mid][0] <= elapsedMs) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return events[best][1];
+  }
+};
+
+function startGhostPacer() {
+  if (!activeChallenge || !activeChallenge.events || activeChallenge.events.length === 0) return;
+  stopGhostPacer();
+  function tickGhost() {
+    if (!isTyping || !startTime) return;
+    const elapsed = Date.now() - startTime;
+    const newGhostIndex = ChallengeProtocol.interpolateGhostIndex(activeChallenge.events, elapsed);
+    if (newGhostIndex !== ghostCharIndex) {
+      ghostCharIndex = newGhostIndex;
+      renderPassage();
+      if (ghostStatusTag) {
+        ghostStatusTag.textContent = `Ghost: ${ghostCharIndex}/${currentPassage.length} chars`;
+      }
+    }
+    if (ghostCharIndex < currentPassage.length && isTyping) {
+      if (typeof requestAnimationFrame === 'function') {
+        ghostRafId = requestAnimationFrame(tickGhost);
+      }
+    }
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    ghostRafId = requestAnimationFrame(tickGhost);
+  }
+}
+
+function stopGhostPacer() {
+  if (ghostRafId && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(ghostRafId);
+    ghostRafId = null;
+  }
+}
+
+// Vault UI Modal Controllers
+function openVaultModal() {
+  if (vaultModal) {
+    vaultModal.classList.remove('hidden');
+    refreshVaultUI();
+  }
+}
+
+function closeVaultModal() {
+  if (vaultModal) {
+    vaultModal.classList.add('hidden');
+  }
+}
+
+async function refreshVaultUI() {
+  if (!vaultDB) return;
+  const stats = await vaultDB.getStats();
+  if (vaultTotalRunsEl) vaultTotalRunsEl.textContent = stats.totalRuns;
+  if (vaultBestWpmEl) vaultBestWpmEl.innerHTML = `${stats.bestWPM} <small class="unit">WPM</small>`;
+  if (vaultAvgWpmEl) vaultAvgWpmEl.innerHTML = `${stats.avgWPM} <small class="unit">WPM</small>`;
+  if (vaultAvgConsistencyEl) vaultAvgConsistencyEl.textContent = `${stats.avgConsistency}%`;
+  if (vaultEngineBadge) {
+    vaultEngineBadge.textContent = vaultDB.isIndexedDBAvailable ? 'INDEXEDDB ACTIVE' : 'IN-MEMORY ACTIVE';
+  }
+
+  const sessions = await vaultDB.getAllSessions();
+  if (!vaultTableBody) return;
+  if (sessions.length === 0) {
+    vaultTableBody.innerHTML = '<tr><td colspan="7" class="vault-empty-state">No saved sessions in Vault yet. Complete a test to record history.</td></tr>';
+    return;
+  }
+
+  let rowsHtml = '';
+  sessions.forEach((s) => {
+    const cleanBadge = s.cleanRun ? ' <span title="Clean Run">★</span>' : '';
+    rowsHtml += `
+      <tr>
+        <td>${escapeHTML(s.dateString || new Date(s.timestamp).toLocaleString())}</td>
+        <td><span class="vault-mode-badge">${escapeHTML(s.mode || '30s')}</span></td>
+        <td><strong>${s.wpm}</strong></td>
+        <td>${s.accuracy}%</td>
+        <td>${s.consistency || 100}%</td>
+        <td>${s.mistakes}${cleanBadge}</td>
+        <td><button class="vault-row-del-btn" data-id="${s.id}" type="button" title="Delete record">✕</button></td>
+      </tr>
+    `;
+  });
+  vaultTableBody.innerHTML = rowsHtml;
+
+  vaultTableBody.querySelectorAll('.vault-row-del-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      const id = e.currentTarget.dataset.id;
+      await vaultDB.deleteSession(id);
+      showVaultToast('Session deleted.');
+      refreshVaultUI();
+    });
+  });
+}
+
+function showVaultToast(msg, duration = 3000) {
+  if (!vaultToast) return;
+  vaultToast.textContent = msg;
+  vaultToast.classList.remove('hidden');
+  clearTimeout(vaultToast._timeout);
+  vaultToast._timeout = setTimeout(() => {
+    vaultToast.classList.add('hidden');
+  }, duration);
+}
+
+// Vault Event Listeners
+if (vaultBtn) vaultBtn.addEventListener('click', openVaultModal);
+if (closeVaultBtn) closeVaultBtn.addEventListener('click', closeVaultModal);
+
+if (vaultExportBtn) {
+  vaultExportBtn.addEventListener('click', async () => {
+    const sessions = await vaultDB.getAllSessions();
+    if (sessions.length === 0) {
+      showVaultToast('Vault is empty. Nothing to export.');
+      return;
+    }
+    const jsonStr = vaultDB.exportData(sessions);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `keyrush-vault-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showVaultToast('✔ Vault exported successfully!');
+  });
+}
+
+if (vaultImportFile) {
+  vaultImportFile.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target.result;
+      const res = vaultDB.validateImport(text);
+      if (!res.valid) {
+        showVaultToast(`✕ Import failed: ${res.error}`);
+        return;
+      }
+      for (const s of res.sessions) {
+        await vaultDB.saveSession(s);
+      }
+      showVaultToast(`✔ Successfully imported ${res.sessions.length} sessions!`);
+      refreshVaultUI();
+      vaultImportFile.value = '';
+    };
+    reader.readAsText(file);
+  });
+}
+
+if (vaultClearBtn) {
+  vaultClearBtn.addEventListener('click', async () => {
+    const confirmed = typeof window !== 'undefined' && window.confirm
+      ? window.confirm('Are you sure you want to clear all Vault sessions? This cannot be undone.')
+      : true;
+    if (confirmed) {
+      await vaultDB.clearAllSessions();
+      showVaultToast('Vault cleared.');
+      refreshVaultUI();
+    }
+  });
+}
+
+// Share Challenge Link Event Listener
+if (shareChallengeBtn) {
+  shareChallengeBtn.addEventListener('click', () => {
+    const compactEvents = (sessionReplayEvents || []).map((ev) => [ev.t, ev.cursor]);
+    const hash = ChallengeProtocol.encode({
+      wpm: calculateWPM(),
+      accuracy: calculateAccuracy(),
+      consistency: lastConsistencyScore,
+      timeLimit: timeLimit,
+      passage: currentPassage,
+      events: compactEvents
+    });
+    if (typeof window !== 'undefined' && window.location) {
+      const fullUrl = window.location.origin + window.location.pathname + hash;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          shareChallengeBtn.textContent = '✔ Link Copied!';
+          setTimeout(() => { shareChallengeBtn.textContent = '🎯 Share Challenge'; }, 2500);
+        }).catch(() => {
+          prompt('Copy challenge URL:', fullUrl);
+        });
+      } else {
+        prompt('Copy challenge URL:', fullUrl);
+      }
+    }
+  });
+}
+
+// Challenge URL Hash Receiver
+function initChallengeFromHash() {
+  if (typeof window === 'undefined' || !window.location || !window.location.hash) return;
+  const hash = window.location.hash;
+  if (!hash.startsWith('#challenge=')) return;
+  const decoded = ChallengeProtocol.decode(hash);
+  if (!decoded) return;
+
+  activeChallenge = decoded;
+  currentPassage = decoded.passage;
+  charIndex = 0;
+  charStates = new Array(currentPassage.length).fill('');
+  timeLimit = decoded.timeLimit;
+  timeLeft = timeLimit === 0 ? 0 : timeLimit;
+
+  if (timeBtns && timeBtns.forEach) {
+    timeBtns.forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.time) === timeLimit);
+    });
+  }
+
+  if (challengeBanner) {
+    challengeBanner.classList.remove('hidden');
+  }
+  if (challengeTargetText) {
+    challengeTargetText.textContent = `Beat ${decoded.wpm} WPM (${decoded.accuracy}% Acc, ${decoded.consistency}% Con)`;
+  }
+  if (ghostStatusTag) {
+    ghostStatusTag.textContent = 'Ghost: Ready';
+  }
+
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.maxLength = currentPassage.length;
+  }
+  renderPassage();
+  updateStats();
+}
+
+function exitChallenge() {
+  activeChallenge = null;
+  stopGhostPacer();
+  ghostCharIndex = -1;
+  if (challengeBanner) challengeBanner.classList.add('hidden');
+  if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  resetTest();
+  loadPassage();
+}
+
+if (exitChallengeBtn) {
+  exitChallengeBtn.addEventListener('click', exitChallenge);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', initChallengeFromHash);
+}
+
+// Initialize Vault & Challenge on load
+if (isBrowser) {
+  vaultDB.init().catch(() => {});
+  initChallengeFromHash();
+}
 
 
 
@@ -1774,6 +2444,23 @@ if (typeof module !== 'undefined' && module.exports) {
     countWords,
     validatePassage,
     CUSTOM_PRESETS,
-    isValidTxtFile
+    isValidTxtFile,
+    calculateConsistency,
+    VaultDatabase,
+    vaultDB,
+    ChallengeProtocol,
+    initChallengeFromHash,
+    exitChallenge,
+    startGhostPacer,
+    stopGhostPacer,
+    getActiveChallenge: () => activeChallenge,
+    setActiveChallenge: (c) => { activeChallenge = c; },
+    getGhostCharIndex: () => ghostCharIndex,
+    setGhostCharIndex: (idx) => { ghostCharIndex = idx; },
+    getLastConsistencyScore: () => lastConsistencyScore,
+    setLastConsistencyScore: (s) => { lastConsistencyScore = s; },
+    getKeystrokeTimestamps: () => keystrokeTimestamps,
+    setKeystrokeTimestamps: (arr) => { keystrokeTimestamps = arr; },
+    addKeystrokeTimestamp: (ts) => { keystrokeTimestamps.push(ts); }
   };
 }

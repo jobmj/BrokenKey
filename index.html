@@ -66,6 +66,18 @@
           <button id="wpm-graph-btn" class="feature-btn" type="button">⌁ Live WPM graph <span class="soon">NEW</span></button>
           <button id="ghost-btn" class="ghost-btn" type="button">◉ Race a ghost <span class="soon">BETA</span></button>
           <button id="custom-passage-btn" class="feature-btn custom-feature-btn" type="button">✏ Custom passage <span class="soon">STUDIO</span></button>
+          <button id="vault-btn" class="feature-btn vault-btn" type="button">⛁ Vault &amp; History <span class="soon">IDB</span></button>
+        </div>
+      </div>
+      <div id="challenge-banner" class="challenge-banner hidden" role="region" aria-label="Peer challenge active">
+        <div class="challenge-info">
+          <span class="live-dot"></span>
+          <span class="challenge-title">PEER CHALLENGE:</span>
+          <span id="challenge-target-text" class="challenge-target">Beat 75 WPM (98% Acc)</span>
+        </div>
+        <div class="challenge-status-group">
+          <span id="ghost-status-tag" class="ghost-status-tag">Ghost: Ready</span>
+          <button id="exit-challenge-btn" class="icon-btn tiny-btn" type="button" title="Exit challenge mode">✕ Exit</button>
         </div>
       </div>
       <div id="passage" class="passage" aria-label="Text to type"></div>
@@ -79,6 +91,7 @@
         <button id="reset-btn" class="btn btn-secondary" type="button">↻ Reset</button>
         <button id="next-btn" class="btn btn-secondary" type="button">Next passage ↗</button>
         <button id="replay-btn" class="btn btn-replay hidden" type="button">▶ Watch Replay</button>
+        <button id="share-challenge-btn" class="btn btn-share hidden" type="button">🎯 Share Challenge</button>
       </div>
     </section>
     <section class="analytics-section" aria-label="Keystroke analytics and performance visualizations">
@@ -342,6 +355,73 @@
           </div>
         </div>
         <div class="replay-hint"><kbd>Space</kbd> Play/Pause &bull; <kbd>←</kbd> <kbd>→</kbd> Seek 1s &bull; <kbd>Esc</kbd> Close</div>
+      </div>
+    </div>
+
+    <!-- Vault & Session History Modal (Feature: Persistent Vault) -->
+    <div id="vault-modal" class="custom-modal hidden" role="dialog" aria-modal="true" aria-labelledby="vault-title">
+      <div class="custom-modal-card vault-modal-card">
+        <div class="custom-modal-header">
+          <div class="custom-title-group">
+            <span class="live-dot"></span>
+            <h3 id="vault-title">Vault &amp; Performance History</h3>
+            <span id="vault-engine-badge" class="badge live-badge">INDEXEDDB ACTIVE</span>
+          </div>
+          <button id="close-vault-btn" class="icon-btn" type="button" aria-label="Close vault">✕ <span>Close</span></button>
+        </div>
+
+        <div class="vault-overview">
+          <div class="vault-stat-card">
+            <span class="vault-stat-label">Total Runs</span>
+            <span id="vault-total-runs" class="vault-stat-val">0</span>
+          </div>
+          <div class="vault-stat-card">
+            <span class="vault-stat-label">All-Time Best</span>
+            <span id="vault-best-wpm" class="vault-stat-val">0 <small class="unit">WPM</small></span>
+          </div>
+          <div class="vault-stat-card">
+            <span class="vault-stat-label">Avg Speed</span>
+            <span id="vault-avg-wpm" class="vault-stat-val">0 <small class="unit">WPM</small></span>
+          </div>
+          <div class="vault-stat-card">
+            <span class="vault-stat-label">Avg Consistency</span>
+            <span id="vault-avg-consistency" class="vault-stat-val">0%</span>
+          </div>
+        </div>
+
+        <div class="vault-actions-toolbar">
+          <div class="vault-btn-group">
+            <button id="vault-export-btn" class="btn btn-secondary" type="button">⬇ Export JSON</button>
+            <label for="vault-import-file" class="btn btn-secondary vault-import-label">
+              ⬆ Import JSON
+              <input type="file" id="vault-import-file" accept=".json" class="sr-only" />
+            </label>
+          </div>
+          <button id="vault-clear-btn" class="btn btn-danger" type="button">🗑 Clear Vault</button>
+        </div>
+
+        <div id="vault-toast" class="vault-toast hidden" role="status"></div>
+
+        <div class="vault-table-container">
+          <table class="vault-table" aria-label="Recent typing sessions">
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>Mode</th>
+                <th>WPM</th>
+                <th>Accuracy</th>
+                <th>Consistency</th>
+                <th>Mistakes</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="vault-table-body">
+              <tr>
+                <td colspan="7" class="vault-empty-state">No saved sessions in Vault yet. Complete a test to record history.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
